@@ -1,0 +1,100 @@
+
+#include "../HLSL/ParticleInclude.hlsl"
+#include "../HLSL/NoiseWaterInput.hlsl"
+
+
+#pragma kernel Water_PerFrame
+
+//逐帧刷新的方法，用来控制与渲染直接相关的数据
+[numthreads(64, 1, 1)]
+void Water_PerFrame(int3 gid : SV_GroupID, int index : SV_GroupIndex)
+{
+    int objIndex = gid.x * 64 + index;
+
+    // if(objIndex == 0){
+    //     FluidParticle particle = (FluidParticle)0;
+    //     particle.worldPos = 0;
+    //     particle.nowSpeed = float3(0, 1, 0);
+    //     particle.size = 1;
+    //     particle.mode = 1;
+    //     particle.uvTransData = 0;
+    //     _FluidParticle[objIndex] = particle;
+    // }
+    // else return;
+
+    FluidParticle particle = _FluidParticle[objIndex];
+    FluidGroup group = _FluidGroup[gid.x];
+
+    //组的存活时间结束, 该粒子也就结束了
+    if(group.dieTime <= _Time.x){
+        particle.mode = 0;  //粒子标记为死亡
+        group.mode = 0;     //组标记为死亡
+        _FluidParticle[objIndex] = particle;
+        _FluidGroup[gid.x] = group;
+        return;
+    }
+
+    if(index == 0){         //只有第一个粒子才有权利更改组数据
+        if(group.mode == 0){//粒子组初始化
+            InitialGroup(group, _FluidParticle[gid.x * 64].random.xyz);
+        }
+        // if(group.dieTime - _Time.x < 3)
+        //     group.mode = 2;
+        if(group.mode == 1){
+            group.worldPos += group.nowSpeed * _Time.y;
+        }
+        _FluidGroup[gid.x] = group;
+    }
+
+    //根据模式进行该粒子的位置设置
+    switch(group.mode){
+        case 0:
+            return;
+        case 1:     //组阶段，粒子位置设置在组周围
+            InitialParticleBesideGroup(particle, group);
+            break;
+        default:
+            OnFreedomParticle(particle, group);
+            break;
+    }
+    _FluidParticle[objIndex] = particle;
+}
+
+
+#pragma kernel Water_PerFixFrame
+//粒子重力没必要这么大
+#define GRAVITY 6.8
+
+[numthreads(64, 1, 1)]
+void Water_PerFixFrame(int3 gid : SV_GroupID, int index : SV_GroupIndex){
+
+    int objIndex = gid.x * 64 + index;
+
+    FluidParticle particle = _FluidParticle[objIndex];
+    FluidGroup group = _FluidGroup[gid.x];
+
+    switch(particle.mode){
+        case 0:     //未运行时直接退出
+            return;
+        case 1:     //组阶段，如果不是第一个粒子就直接退出，防止异步bug
+            if(index != 0)
+                return;
+            UpdataGroupSpeed(group, particle.random.xyz);
+            if(_GroupMode.z == 1)
+                group.nowSpeed += float3(0, -GRAVITY, 0) * _Time.z;
+            if(CheckCollsion(group)){
+                group.mode = 2;
+            }
+            _FluidGroup[gid.x] = group;         //赋值组数据
+            break;
+        case 2:     //正常粒子，直接自由移动即可
+            UpdataSpeed(particle);
+
+            if(_Mode.w == 1)
+                particle.nowSpeed += float3(0, -GRAVITY, 0) * _Time.z;
+            CheckCollsion(particle);    //普通粒子碰撞
+            _FluidParticle[objIndex] = particle;  //赋值单个粒子数据
+            break;
+    }
+
+}

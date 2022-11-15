@@ -1,0 +1,313 @@
+#pragma kernel CreateMesh
+
+float3 _CameraPos;
+float4 _TessData;   //x=Degree, y=Min, z=Max, w=height
+float4 _TessSizeData;   //xy=beginXZ, zw = endXZ - beginXZ
+uint _PointsSize;
+
+// struct Quadrangle{
+//     float3 position0;
+//     float3 position1;
+//     float3 position2;
+//     float3 position3;
+
+//     int isUse;
+// };
+
+
+struct Triangle{
+    float3 position0;
+    float3 position1;
+    float3 position2;
+    float2 uv0;
+    float2 uv1;
+    float2 uv2;
+};
+
+#define INSIDE_RADIO 0.31
+
+#define random(seed) sin(seed * 100) * 0.01
+
+RWStructuredBuffer<Triangle> _CreateResult;      //结果位置
+AppendStructuredBuffer<Triangle> _ClipResult;    //结果位置
+Texture2D<float4> _HeightTex;
+uint _TextureSize;
+
+void TessTaiangle(float3 point0, float3 point1, float2 uv0, float2 uv1, float3 dirInside0, float3 dirInside1, 
+    float2 uvIn0, float2 uvIn1, uint tessLine, uint tessInside, inout uint beginIndex){
+
+        float insideRadio = INSIDE_RADIO / tessInside;
+        uint i;
+        float3 nowPoints[2]; float2 nowUvs[2];
+        nowPoints[0] = point0 + dirInside0 * insideRadio; nowPoints[1] = point1 + dirInside1 * insideRadio;
+        nowUvs[0] = uv0 + uvIn0 * insideRadio; nowUvs[1] = uv1 + uvIn1 * insideRadio;
+        nowPoints[0].y = _HeightTex[nowUvs[0] * _TextureSize].x * _TessData.w;
+        nowPoints[1].y = _HeightTex[nowUvs[1] * _TextureSize].x * _TessData.w;
+        // nowPoints[0].y = random(nowUvs[0].x + nowUvs[0].y) * _TessData.w;
+        // nowPoints[1].y = random(nowUvs[1].x + nowUvs[1].y) * _TessData.w;
+
+        Triangle tri = (Triangle)0;
+        uint center = tessLine / 2;
+        //循环生成边界的顶点
+        for(i = 0; i < tessLine - 1; i++){
+            float3 arr0 = point0 + (point1 - point0) * ((float) i / (tessLine - 1));
+            float3 arr1 = point0 + (point1 - point0) * ((float) (i + 1) / (tessLine - 1));
+            float2 uvArr0 = uv0 + (uv1 - uv0) * ((float) i / (tessLine - 1));
+            float2 uvArr1 = uv0 + (uv1 - uv0) * ((float) (i + 1) / (tessLine - 1));
+            arr0.y = _HeightTex[uvArr0 * _TextureSize].x * _TessData.w;
+            arr1.y = _HeightTex[uvArr1 * _TextureSize].x * _TessData.w;
+            // arr0.y = random(uvArr0.x + uvArr0.y) * _TessData.w;
+            // arr1.y = random(uvArr1.x + uvArr1.y) * _TessData.w;
+
+            tri.position0 = arr0;
+            tri.position1 = arr1;
+            tri.uv0 = uvArr0;
+            tri.uv1 = uvArr1;
+            if(i >= center){
+                tri.position2 = nowPoints[1];
+                tri.uv2 = nowUvs[1];
+            }
+            else{
+                tri.position2 = nowPoints[0];
+                tri.uv2 = nowUvs[0];
+            }
+            tri.uv0.x = 10;
+            _CreateResult[beginIndex] = tri;
+            beginIndex++;
+        }
+
+        //补充缺失的部分
+        tri.position1 = nowPoints[1]; tri.position2 = nowPoints[0];
+        tri.uv1 = nowUvs[1]; tri.uv2 = nowUvs[0];
+        if(tessLine > 2){
+            tri.position0 = point0 + (point1 - point0) * ((float)center / (tessLine - 1));
+            tri.uv0 = uv0 + (uv1 - uv0) * ((float)center / (tessLine - 1));
+            tri.position0.y = _HeightTex[tri.uv0 * _TextureSize].x * _TessData.w;
+            // tri.position0.y = random(tri.uv0.x + tri.uv0.y) * _TessData.w;
+        }
+        else{
+            tri.position0 = point1;
+            tri.uv0 = uv1;
+            // tri.position0.y = random(tri.uv0.x + tri.uv0.y) * _TessData.w;
+        }
+        tri.uv0.x = 10;
+        _CreateResult[beginIndex] = tri;
+        beginIndex++;
+
+        //生成内部的顶点
+        float3 nextPoints[2]; float2 nextUvs[2]; float nowRadio = insideRadio * 2.0;
+        for(i = 1; i < tessInside; i++){
+            nextPoints[0] = point0 + dirInside0 * nowRadio; nextPoints[1] = point1 + dirInside1 * nowRadio;
+            nextUvs[0] = uv0 + uvIn0 * nowRadio; nextUvs[1] = uv1 + uvIn1 * nowRadio;
+            nextPoints[0].y = _HeightTex[nextUvs[0] * _TextureSize].x * _TessData.w; 
+            nextPoints[1].y = _HeightTex[nextUvs[1] * _TextureSize].x * _TessData.w;
+            // nextPoints[0].y = random(nextUvs[0].x + nextUvs[0].y) * _TessData.w;
+            // nextPoints[1].y = random(nextUvs[1].x + nextUvs[1].y) * _TessData.w;
+
+            nowRadio += insideRadio;
+            tri.position0 = nowPoints[0]; tri.position1 = nowPoints[1]; tri.position2 = nextPoints[0];
+            tri.uv0 = nowUvs[0]; tri.uv1 = nowUvs[1]; tri.uv2 = nextUvs[0];
+            tri.uv0.x = 10;
+            _CreateResult[beginIndex] = tri;
+            beginIndex++;
+
+            tri.position0 = nextPoints[0]; tri.position1 = nowPoints[1]; tri.position2 = nextPoints[1];
+            tri.uv0 = nextUvs[0]; tri.uv1 = nowUvs[1]; tri.uv2 = nextUvs[1];
+            tri.uv0.x = 10;
+            _CreateResult[beginIndex] = tri;
+            beginIndex++;
+
+            nowPoints[0] = nextPoints[0]; nowPoints[1] = nextPoints[1];
+            nowUvs[0] = nextUvs[0]; nowUvs[1] = nextUvs[1];
+        }
+}
+
+
+void CreateTriangle(float3 point0, float3 point1, float3 point2, float2 uv0, float2 uv1, float2 uv2,
+    uint tessCount0, uint tessCount1, uint tessCount2, inout uint beginIndex){
+        uint inside = max(max(tessCount0, tessCount1), tessCount2);
+        Triangle tri = (Triangle)0;
+
+        if(inside == 0){
+            tri.position0 = point0;
+            tri.position1 = point1;
+            tri.position2 = point2;
+            tri.uv0 = uv0;
+            tri.uv1 = uv1;
+            tri.uv2 = uv2;
+            tri.position0.y = _HeightTex[uv0 * _TextureSize].x * _TessData.w; 
+            tri.position1.y = _HeightTex[uv1 * _TextureSize].x * _TessData.w; 
+            tri.position2.y = _HeightTex[uv2 * _TextureSize].x * _TessData.w;
+            tri.uv0.x = 10;
+            _CreateResult[beginIndex] = tri;
+            beginIndex++;
+            return;
+        }
+
+        float3 point0Dir = (point1 - point0) + (point2 - point0);
+        float3 point1Dir = (point2 - point1) + (point0 - point1);
+        float3 point2Dir = (point1 - point2) + (point0 - point2);
+        float2 uv0Dir = (uv1 - uv0) + (uv2 - uv0);
+        float2 uv1Dir = (uv2 - uv1) + (uv0 - uv1);
+        float2 uv2Dir = (uv1 - uv2) + (uv0 - uv2);
+
+        TessTaiangle(point0, point1, uv0, uv1, point0Dir, point1Dir, uv0Dir, uv1Dir, 2 + tessCount0, inside, beginIndex);
+        TessTaiangle(point1, point2, uv1, uv2, point1Dir, point2Dir, uv1Dir, uv2Dir, 2 + tessCount1, inside, beginIndex);
+        TessTaiangle(point2, point0, uv2, uv0, point2Dir, point0Dir, uv2Dir, uv0Dir, 2 + tessCount2, inside, beginIndex);
+
+        tri.position0 = point0 + point0Dir * INSIDE_RADIO;
+        tri.position1 = point1 + point1Dir * INSIDE_RADIO;
+        tri.position2 = point2 + point2Dir * INSIDE_RADIO;
+        tri.uv0 = uv0 + uv0Dir * INSIDE_RADIO;
+        tri.uv1 = uv1 + uv1Dir * INSIDE_RADIO;
+        tri.uv2 = uv2 + uv2Dir * INSIDE_RADIO;
+
+        tri.position0.y = _HeightTex[tri.uv0 * _TextureSize].x * _TessData.w; 
+        tri.position1.y = _HeightTex[tri.uv1 * _TextureSize].x * _TessData.w; 
+        tri.position2.y = _HeightTex[tri.uv2 * _TextureSize].x * _TessData.w; 
+        // tri.position0.y = random(tri.uv0.x + tri.uv0.y) * _TessData.w;
+        // tri.position1.y = random(tri.uv1.x + tri.uv1.y) * _TessData.w;
+        // tri.position2.y = random(tri.uv2.x + tri.uv2.y) * _TessData.w;
+
+            tri.uv0.x = 10;
+        _CreateResult[beginIndex] = tri;
+        beginIndex++;
+}
+
+void CreateDown(uint3 groupId, uint3 gThreadId){
+    uint allId = groupId.x * 64 + gThreadId.x;
+    uint perGroupSize = 2 + (_TessData.x + 1)  * _TessData.x * 9;
+
+    if(allId >= _PointsSize * _PointsSize) return;
+
+    uint xIndex = allId % _PointsSize; uint yIndex = allId / _PointsSize;
+    
+    float2 uvUp = float2((float)xIndex / _PointsSize, (float)(yIndex + 1) / _PointsSize);
+    float2 uvDo = float2((float)xIndex / _PointsSize, (float)yIndex / _PointsSize);
+    float2 uvRi = float2((float)(xIndex + 1) / _PointsSize, (float)yIndex / _PointsSize);
+    float3 posUp = float3( _TessSizeData.x + _TessSizeData.z * uvUp.x, 0, _TessSizeData.y + _TessSizeData.w * uvUp.y);
+    float3 posDo = float3( _TessSizeData.x + _TessSizeData.z * uvDo.x, 0, _TessSizeData.y + _TessSizeData.w * uvDo.y);
+    float3 posRi = float3( _TessSizeData.x + _TessSizeData.z * uvRi.x, 0, _TessSizeData.y + _TessSizeData.w * uvRi.y);
+
+    posUp.y = _HeightTex[uvUp * _TextureSize].x * _TessData.w; 
+    posDo.y = _HeightTex[uvDo * _TextureSize].x * _TessData.w; 
+    posRi.y = _HeightTex[uvRi * _TextureSize].x * _TessData.w;
+ 
+    uint beginIndex = perGroupSize * allId;
+
+    CreateTriangle(posDo, posUp, posRi, uvDo, uvUp, uvRi, _TessData.x, _TessData.x, _TessData.x, beginIndex);
+
+    for(; beginIndex < perGroupSize * allId + perGroupSize / 2; beginIndex++){
+        _CreateResult[beginIndex] = (Triangle)0;
+        beginIndex++;
+    }
+}
+
+void CreateUp(uint3 groupId, uint3 gThreadId){
+    uint allId = groupId.x * 64 + gThreadId.x;
+    uint perGroupSize = 2 + (_TessData.x + 1)  * _TessData.x * 9;
+
+    if(allId >= _PointsSize * _PointsSize) return;
+
+    uint xIndex = allId % _PointsSize; uint yIndex = allId / _PointsSize;
+    
+    float2 uvUp = float2((float)(xIndex + 1) / _PointsSize, (float)(yIndex + 1) / _PointsSize);
+    float2 uvDo = float2((float)(xIndex + 1) / _PointsSize, (float)yIndex / _PointsSize);
+    float2 uvLe = float2((float)xIndex / _PointsSize, (float)(yIndex + 1) / _PointsSize);
+    float3 posUp = float3( _TessSizeData.x + _TessSizeData.z * uvUp.x, 0, _TessSizeData.y + _TessSizeData.w * uvUp.y);
+    float3 posDo = float3( _TessSizeData.x + _TessSizeData.z * uvDo.x, 0, _TessSizeData.y + _TessSizeData.w * uvDo.y);
+    float3 posLe = float3( _TessSizeData.x + _TessSizeData.z * uvLe.x, 0, _TessSizeData.y + _TessSizeData.w * uvLe.y);
+
+    posUp.y = _HeightTex[uvUp * _TextureSize].x * _TessData.w;
+    posDo.y = _HeightTex[uvDo * _TextureSize].x * _TessData.w; 
+    posLe.y = _HeightTex[uvLe * _TextureSize].x * _TessData.w;
+
+    uint beginIndex = perGroupSize * allId + perGroupSize / 2;
+
+    CreateTriangle(posLe, posUp, posDo, uvLe, uvUp, uvDo, _TessData.x, _TessData.x, _TessData.x, beginIndex);
+
+    for(; beginIndex < perGroupSize * allId + perGroupSize; beginIndex++){
+        _CreateResult[beginIndex] = (Triangle)0;
+        beginIndex++;
+    }
+}
+
+[numthreads(64, 2, 1)]
+void CreateMesh (uint3 groupId : SV_GroupID, uint3 gThreadId : SV_GroupThreadID)
+{
+    if(gThreadId.x != 0) return;
+    switch(gThreadId.y){
+        case 0:
+            CreateDown(groupId, gThreadId);
+            break;
+        // case 1:
+        //     CreateUp(groupId, gThreadId);
+        //     break;
+    }
+
+
+
+}
+
+#pragma kernel ClipMesh
+
+float4x4 _Matrix_VP;    //用来检测是否需要渲染的投影矩阵
+uint _ArraySize;
+
+bool CheckVP(float3 pos){
+    float4 clipPos = mul(_Matrix_VP, float4(pos, 1));
+    if(abs(clipPos.x) < clipPos.w && abs(clipPos.y) < clipPos.w && abs(clipPos.z) < clipPos.w)
+        return true;
+    return false;
+}
+
+[numthreads(1024, 1, 1)]
+void ClipMesh (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= _ArraySize) return;
+
+    Triangle tri = _CreateResult[id.x];
+    if(tri.uv0.x < -0.5) {
+        return;
+    }
+
+    if (CheckVP(tri.position0) && CheckVP(tri.position1) && CheckVP(tri.position2)){
+        return;
+    }
+    _ClipResult.Append(tri);
+    
+}
+
+
+#pragma kernel ClipMeshByClipPlane
+
+float4 _Plane[6];                               //判断的6个面
+
+//判断是否在平面外
+bool IsOutsideThePlane(float4 plane, float3 pointPosition)
+{
+    if (dot(plane.xyz, pointPosition) + plane.w > 0)
+        return true;
+    return false;
+}
+
+[numthreads(1024, 1, 1)]
+void ClipMeshByClipPlane (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= _ArraySize) return;
+    return;
+
+    Triangle tri = _CreateResult[id.x];
+    if(tri.uv0.x < -0.5) {
+        // _ClipResult.Append(tri);
+        return;
+    }
+
+    for (int i = 0; i < 6; i++)
+    {
+        if (IsOutsideThePlane(_Plane[i], tri.position0) && IsOutsideThePlane(_Plane[i], tri.position1) && IsOutsideThePlane(_Plane[i], tri.position2)){
+            return;
+        }
+    }
+    _ClipResult.Append(tri);
+}

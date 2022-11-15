@@ -1,0 +1,135 @@
+﻿
+
+Texture2D<float4> _OriginTexture;
+RWTexture2D<float4> _TargetTexture;
+
+uint2 _TextureSize;
+
+struct ComputeShaderInput
+{
+	uint3 GroupID           : SV_GroupID;           // 3D index of the thread group in the dispatch.
+	uint3 GroupThreadID     : SV_GroupThreadID;     // 3D index of local thread ID in a thread group.
+	uint3 DispatchThreadID  : SV_DispatchThreadID;  // 3D index of global thread ID in the dispatch.
+	uint  GroupIndex        : SV_GroupIndex;        // Flattened local index of the thread within a thread group.
+};
+
+#pragma kernel Copy
+
+[numthreads(32, 32, 1)]
+void Copy(ComputeShaderInput input) {
+	//超过结束
+	if (input.DispatchThreadID.x >= _TextureSize.x
+		|| input.DispatchThreadID.y >= _TextureSize.y) return;
+
+	int2 id = int2(input.DispatchThreadID.x, input.DispatchThreadID.y);
+
+	_TargetTexture[id] = _OriginTexture[id];
+}
+
+
+Texture2D<float4> _CurrenRT;
+Texture2D<float4> _PrevRT;
+
+#pragma kernel WaveWater
+[numthreads(32, 32, 1)]
+void WaveWater(uint2 input : SV_DispatchThreadID) {
+	if (input.x >= _TextureSize.x
+		|| input.y >= _TextureSize.y) return;
+
+	float down = _CurrenRT[input.xy + uint2(0, -1)].y;
+	float left = _CurrenRT[input.xy + uint2(-1, 0)].y;
+	float right = _CurrenRT[input.xy + uint2(1, 0)].y;
+	float up = _CurrenRT[input.xy + uint2(0, 1)].y;
+
+	float center = _PrevRT[input.xy].y;
+	float size = saturate( (down + left + right + up) / 2 - center);
+	float4 color = _PrevRT[input.xy];
+	color.y = size * 0.999;
+	_TargetTexture[input.xy] = color;
+}
+
+
+
+
+
+
+
+
+
+float2 hash2d(float2 input) {
+	const float2 k = float2(0.3183099, 0.3678794);
+	input = input * k + k.yx;
+	return -1.0 + 2.0 * frac(16.0 * k * frac(input.x * input.y * (input.x + input.y)));
+}
+
+//进行插值
+float Cos_Interpolate(float a, float b, float t)
+{
+	float ft = t * 3.14159;
+	t = (1 - cos(ft)) * 0.5;
+	return a * (1 - t) + t * b;
+}
+
+float Perlin2DFun(float2 pos) {
+	float2 i = floor(pos);
+	float2 f = frac(pos);
+
+	//获得四个点，也就是立方体的八个点的对应向量
+	float2 g0 = hash2d(i + float2(0.0, 0.0));
+	float2 g1 = hash2d(i + float2(1.0, 0.0));
+	float2 g2 = hash2d(i + float2(0.0, 1.0));
+	float2 g3 = hash2d(i + float2(1.0, 1.0));
+
+	//获得点乘后的大小
+	float v0 = dot(g0, f - float2(0.0, 0.0));
+	float v1 = dot(g1, f - float2(1.0, 0.0));
+	float v2 = dot(g2, f - float2(0.0, 1.0));
+	float v3 = dot(g3, f - float2(1.0, 1.0));
+
+	float inter0 = Cos_Interpolate(v0, v1, f.x);
+	float inter1 = Cos_Interpolate(v2, v3, f.x);
+
+	return Cos_Interpolate(inter0, inter1, f.y);
+}
+
+float Perlin2DFBM(float2 pos, int octave) {
+	float noise = 0.0;
+	float frequency = 1.0;
+	float amplitude = 1.0;
+
+	for (int i = 0; i < octave; i++)
+	{
+		noise += Perlin2DFun(pos * frequency) * amplitude;
+		frequency *= 2.0;
+		amplitude *= 0.5;
+	}
+	return noise;
+}
+
+
+float2 _Frequency;
+
+#define random(seed) sin(seed * 641.5467987313875 + 1.943856175)
+
+
+#pragma kernel CreateWave
+[numthreads(32, 32, 1)]
+void CreateWave(uint2 input : SV_DispatchThreadID) {
+	if (input.x >= _TextureSize.x
+		|| input.y >= _TextureSize.y) return;
+
+	//float2 pos = float2(input.x, input.y) / _TextureSize;
+	float2 pos = (float2(input.x, input.y)) / _Frequency.x;
+
+	float2 rand = float2(random(_Frequency.y), random(-_Frequency.y));
+	pos *= rand;
+
+
+	float waveVal = Perlin2DFBM(pos, 1);
+	waveVal = smoothstep(0.5, 1, waveVal);
+
+
+	float4 texCol = _TargetTexture[input.xy];
+	texCol.y = texCol.y + waveVal;
+	_TargetTexture[input.xy] = texCol;
+}

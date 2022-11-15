@@ -1,0 +1,74 @@
+#pragma kernel Particles_PerFrame
+
+#include "../HLSL/ParticleFactoryInclude.hlsl"
+
+
+//逐帧刷新的方法，用来控制与渲染直接相关的数据
+[numthreads(64, 1, 1)]
+void Particles_PerFrame(uint3 gid : SV_GroupID, uint index : SV_GroupIndex)
+{
+    int allIndex = gid.x * 64 + index;
+    int groupIndex = gid.x;
+
+    ParticleNodeData group = _GroupNodeBuffer[groupIndex];
+    NoiseParticleData particle = _ParticlesBuffer[allIndex];
+
+    if(group.lifeTimeRange.z < _Time.x)     //当最大运行时间小于当前时间时，标记为死亡
+    {
+        particle.index.y = 0;
+        _ParticlesBuffer[allIndex] = particle;
+        return;
+    }
+
+
+    float random = (particle.random.x + particle.random.y + particle.random.z)/3.0;
+    if(group.lifeTimeRange.z - group.lifeTimeRange.y - group.lifeTimeRange.x * random > _Time.x)  //判断是否到达该粒子的释放时间
+    {
+        particle.index.y = 0;
+        _ParticlesBuffer[allIndex] = particle;
+        return;
+    }
+
+    //存活状态行为，开始检查该粒子，先初始化，再判断是否超时
+    if(particle.index.y == 0)               //进行初始化
+        InitialFactory(group, particle);
+    else
+        UpdateFactory(particle);     //更新时间以及速度
+
+
+    //开始计算颜色等数据
+    float time_01 = saturate( particle.random.w / group.lifeTimeRange.y );
+    AnimateUVData uvData = AnimateUV(time_01, group.uvCount.xy);
+    particle.uvTransData = uvData.uvData;
+    particle.interpolation = uvData.interpolation;
+    particle.color = float4(LoadColor(time_01, group), LoadAlpha(time_01, group));
+
+    particle.size = lerp(group.smoothRange.x, group.smoothRange.y, LoadSize(time_01, group));   //粒子大小随时间变化
+    // particle.size = LoadSize(time_01, group);
+    _ParticlesBuffer[allIndex] = particle;
+}
+
+#pragma kernel Particles_PerFixFrame
+
+//粒子重力没必要这么大
+#define GRAVITY 4.4
+
+//逐帧刷新的方法，用来控制大小以及施加力
+[numthreads(64, 1, 1)]
+void Particles_PerFixFrame(uint3 gid : SV_GroupID, uint index : SV_GroupIndex)
+{
+    int allIndex = gid.x * 64 + index;
+    int groupIndex = gid.x;
+
+    ParticleNodeData group = _GroupNodeBuffer[groupIndex];
+    NoiseParticleData particle = _ParticlesBuffer[allIndex];
+
+    if(particle.index.y == 0)
+        return;
+
+    // o = UpdataSpeed(o, init);
+    UpdataSpeed(particle, group);
+    if(group.initEnum.y == 1)
+        particle.nowSpeed += float3(0, -GRAVITY, 0) * _Time.z;
+    _ParticlesBuffer[allIndex] = particle;
+}

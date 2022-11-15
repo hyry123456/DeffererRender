@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: cbb0177364ff2714bbb564192e4dcf13
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - planeMesh: {instanceID: 0}
+  - showShader: {fileID: 4800000, guid: 1a1ea4c7d39a2ae44b8564dd8e6c83ce, type: 3}
+  - showMat: {instanceID: 0}
+  - normalTex: {instanceID: 0}
+  - heightmapTex: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
