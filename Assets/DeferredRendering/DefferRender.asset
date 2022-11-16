@@ -18,7 +18,7 @@ MonoBehaviour:
     useGPUInstancing: 1
     useSRPBatcher: 1
     maskLight: 0
-    renderScale: 0.8
+    renderScale: 1
     renderingLayerMask: -1
     cameraShader: {fileID: 4800000, guid: f6039a3f5da7b864696492421b8527b1, type: 3}
     fogSetting:
@@ -33,7 +33,7 @@ MonoBehaviour:
   lightingSettings:
     clusterLightSetting:
       clusterLightCS: {fileID: 7200000, guid: 566b904d724366c488883764d43495b7, type: 3}
-      clusterCount: {x: 16, y: 16, z: 36}
+      clusterCount: {x: 16, y: 16, z: 32}
       isUse: 0
     lightWrap: 0
   shadows:

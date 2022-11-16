@@ -390,7 +390,7 @@ namespace DefferedRender
                 widthTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store,
                 depthTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store
             );
-            buffer.ClearRenderTarget(true, true, Color.clear);
+            buffer.ClearRenderTarget(false, true, Color.clear);
             buffer.DrawProcedural(Matrix4x4.identity, material, (int)FluidPass.Width,
                 MeshTopology.Points, 1, particleBuffer.count);
 
@@ -398,7 +398,7 @@ namespace DefferedRender
                 normalTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store,
                 depthTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store
                 );
-            buffer.ClearRenderTarget(true, true, Color.clear);
+            buffer.ClearRenderTarget(false, true, Color.clear);
 
             buffer.DrawProcedural(Matrix4x4.identity, material, (int)FluidPass.Normal,
                 MeshTopology.Points, 1, particleBuffer.count);

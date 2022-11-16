@@ -128,17 +128,17 @@ namespace DefferedRender
 			}
 
 			buffer.SetComputeTextureParam(createClusterCS, readyKernel, depthId, depthId);
-
 			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterBufferId, clusterBuffer);
 			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterCountBufferId, clusterCountBuffer);
 			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterArrayBufferId, clusterArrayBuffer);
 			buffer.SetComputeMatrixParam(createClusterCS, viewToWorldMatrixId, camera.transform.localToWorldMatrix);
 			buffer.SetComputeFloatParam(createClusterCS, "_FarDistance", camera.farClipPlane);
-            //buffer.DispatchCompute(createClusterCS, readyKernel, groupCount, 1, 1);
             buffer.DispatchCompute(createClusterCS, readyKernel, xyCount, 1, 1);
 
             buffer.SetGlobalBuffer(clusterCountBufferId, clusterCountBuffer);
 			buffer.SetGlobalBuffer(clusterArrayBufferId, clusterArrayBuffer);
+
+			//DrawCluster();
 		}
 
         private void OnDisable()
@@ -148,5 +148,43 @@ namespace DefferedRender
 			clusterArrayBuffer?.Release();
 		}
 
-    }
+#if UNITY_EDITOR
+		ClusterData[] clusters;
+		int[] counts;
+
+		public void DrawCluster()
+        {
+			if(clusters == null || clusters.Length != clusterBuffer.count)
+            {
+				clusters = new ClusterData[clusterBuffer.count];
+				counts = new int[clusterBuffer.count];
+			}
+			clusterBuffer.GetData(clusters);
+			clusterCountBuffer.GetData(counts);
+			for(int i=0; i< clusters.Length; i++)
+            {
+				ClusterData cluster = clusters[i];
+				cluster.p0 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p0);
+				cluster.p1 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p1);
+				cluster.p2 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p2);
+				cluster.p3 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p3);
+				cluster.p4 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p4);
+				cluster.p5 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p5);
+				cluster.p6 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p6);
+				cluster.p7 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p7);
+				Color color = counts[i] > 0 ? Color.red : Color.white;
+				Debug.DrawLine(cluster.p0, cluster.p1, color);
+				Debug.DrawLine(cluster.p1, cluster.p2, color);
+				Debug.DrawLine(cluster.p2, cluster.p3, color);
+				Debug.DrawLine(cluster.p3, cluster.p0, color);
+
+				Debug.DrawLine(cluster.p4, cluster.p5, color);
+				Debug.DrawLine(cluster.p5, cluster.p6, color);
+				Debug.DrawLine(cluster.p6, cluster.p7, color);
+				Debug.DrawLine(cluster.p7, cluster.p4, color);
+			}
+		}
+#endif
+
+	}
 }

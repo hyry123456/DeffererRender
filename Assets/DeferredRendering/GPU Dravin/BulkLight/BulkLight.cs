@@ -27,7 +27,6 @@ namespace DefferedRender
                 {
                     GameObject game = new GameObject("BulkLight");
                     game.AddComponent<BulkLight>();
-                    game.hideFlags = HideFlags.HideAndDontSave;
                 }
                 return instance;
             }
@@ -87,6 +86,9 @@ namespace DefferedRender
 
         private bool RecaculateBulkLight()
         {
+            if (waiting == null || waiting.Count == 0)
+                return true;
+
             if(boxsBuffer == null)
             {
                 boxsBuffer = new ComputeBuffer(drawing.Count + waiting.Count,

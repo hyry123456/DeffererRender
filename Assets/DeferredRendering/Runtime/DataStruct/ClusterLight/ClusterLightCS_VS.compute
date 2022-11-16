@@ -151,11 +151,11 @@ void ReadyLight(ComputeShaderInput input)
 		int size = 0;
 		for (int j = 0; j < _OtherLightCount; j++) {
 			if (CheckPositionInLight(data.p0, j) ||
-				// CheckPositionInLight(data.p1, j) ||
+				CheckPositionInLight(data.p1, j) ||
 				CheckPositionInLight(data.p2, j) ||
-				// CheckPositionInLight(data.p3, j) ||
+				CheckPositionInLight(data.p3, j) ||
 				CheckPositionInLight(data.p4, j) ||
-				// CheckPositionInLight(data.p5, j) ||
+				CheckPositionInLight(data.p5, j) ||
 				CheckPositionInLight(data.p6, j) ||
 				CheckPositionInLight(data.p7, j)
 				)

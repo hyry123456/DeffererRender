@@ -218,13 +218,15 @@ namespace DefferedRender
 			int depthId)
 		{
 			ClusterLight_VS clusterLight_VS = ClusterLight_VS.Instance;
-			if (camera.cameraType != CameraType.Game || !setting.isUse || clusterLight_VS == null)
+			if (camera.cameraType == CameraType.Game && setting.isUse && clusterLight_VS == null)
 			{
+				buffer.EnableShaderKeyword("_USE_CLUSTER");
+			}
+            else
+            {
 				buffer.DisableShaderKeyword("_USE_CLUSTER");
 				return;
 			}
-			else
-				buffer.EnableShaderKeyword("_USE_CLUSTER");
 
 			clusterLight_VS.ComputeLightCluster(buffer, setting, camera, depthId);
 		}
