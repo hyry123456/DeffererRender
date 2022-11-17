@@ -27,6 +27,7 @@ v2f vert(appdata v)
     o.positionWS = TransformObjectToWorld(v.vertex);
     o.uv3D = v.uv3D;
     o.positionCS = TransformWorldToHClip(o.positionWS);
+    o.positionWS = v.vertex;
     return o;
 }
 
@@ -61,13 +62,12 @@ float4 frag(v2f input) : SV_Target
     //计算云朵的uv，实际上这种计算方式就是因为xz轴是沿平面延申的，除以y轴后会让近的部分的uv缩小
     //而且根据数学推断，这样除以之后由于uv的距离为1，实际上这些值都会接近一个恒值
     //同时使用世界坐标，可以裁剪掉下面的云层
-    float2 skyuv = input.positionWS.xz / (step(0, input.positionWS.y) * input.positionWS.y);
-
+    float2 skyuv = input.positionWS.xz / (input.positionWS.y);
+    float blendValue = smoothstep(0, _SkyUVScale, input.positionWS.y);
 
     //星星
     float stars = SAMPLE_TEXTURE2D(_Stars, sampler_Stars, (skyuv + float2(_StarsSpeed, _StarsSpeed) * _Time.x) * _StarsFrequency).r;
     float3 starsCol = step(_StarsCutoff, stars) * _StarsSkyColor * saturate(-direction.y);
-
 
     //云朵
     float cloud = SAMPLE_TEXTURE2D(_Cloud, sampler_Cloud, (skyuv + float2(_CloudSpeed, _CloudSpeed) * _Time.x) * _CloudFrequency).r;
@@ -78,8 +78,9 @@ float4 frag(v2f input) : SV_Target
         lerp(_CloudDayColor, _CloudNightColor, saturate(-direction.y * 0.5 + 0.5));
     cloudCol += saturate(smoothstep( _CloudCutoff, saturate(_CloudCutoff + 0.2), cloud * distort)) * 
         lerp(_CloudDayColor * 0.3, _CloudNightColor * 0.3, saturate(-direction.y * 0.5 + 0.5));
-
     starsCol *= (1 - cloudCol);
+
+    float3 starAndCloudCol = (starsCol + cloudCol) * blendValue;
 
     float ypos = saturate(input.uv3D.y);
 
@@ -92,6 +93,7 @@ float4 frag(v2f input) : SV_Target
     float3 horizonCol = saturate(1 - horizon) * ((_HorizonColorDay + midline * _HorizonLightDay) * saturate(direction.y * 10)
         + (_HorizonColorNight + midline * _HorizonLightNight) * saturate(-direction.y * 10)) * _HorizonBrightness;
 
-    return float4(starsCol + cloudCol + skyGradients + horizonCol + SunAndMoon,1);
+
+    return float4(starAndCloudCol + skyGradients + horizonCol + SunAndMoon,1);
 }
 #endif

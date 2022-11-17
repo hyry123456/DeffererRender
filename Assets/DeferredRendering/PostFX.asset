@@ -23,7 +23,7 @@ MonoBehaviour:
     bilaterFilterFactor: 0.13
     blurRadius: 2
   bulkLight:
-    useBulkLight: 0
+    useBulkLight: 1
     shrinkRadio: 288
     circleCount: 100
     scatterRadio: 0.63

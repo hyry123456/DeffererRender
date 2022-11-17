@@ -34,8 +34,8 @@ MonoBehaviour:
     clusterLightSetting:
       clusterLightCS: {fileID: 7200000, guid: 566b904d724366c488883764d43495b7, type: 3}
       clusterCount: {x: 16, y: 16, z: 32}
-      isUse: 0
-    lightWrap: 0
+      isUse: 1
+    lightWrap: 0.311
   shadows:
     maxDistance: 100
     distanceFade: 0.3

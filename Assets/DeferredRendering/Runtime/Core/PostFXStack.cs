@@ -146,8 +146,7 @@ namespace DefferedRender
 		/// <param name="sourceId">Ó°ÏìµÄÎÆÀí</param>
 		public void Render(int sourceId)
         {
-
-            if (settings.BulkLighting.useBulkLight)
+			if (settings.BulkLighting.useBulkLight && BulkLight.UseBulkLight)
             {
                 DrawBulkLight(sourceId);
             }
@@ -253,6 +252,7 @@ namespace DefferedRender
             buffer.SetRenderTarget(
 				bulkLightTargetTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store,
 				bulkLightDepthTexId, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store);
+
             BulkLight.Instance.DrawBulkLight(buffer);
 
 			buffer.ReleaseTemporaryRT(bulkLightDepthTexId);

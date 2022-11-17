@@ -11,6 +11,8 @@ Shader "Lapu/Skybox"
 		_MoonRadius("Moon Radius",  Range(0, 2)) = 0.1
 		_MoonOffset("Moon Crescent",  Range(-1, 1)) = -0.1
 
+		_SkyUVScale("Sky UV Scale", Range(0, 0.5)) = 0.5
+
 		[Header(Star Settings)]
 		_Stars("Stars Texture", 2D) = "black" {}
 		_StarsCutoff("Stars Cutoff",  Range(0, 1)) = 0.21

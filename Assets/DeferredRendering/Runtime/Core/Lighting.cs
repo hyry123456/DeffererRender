@@ -182,7 +182,7 @@ namespace DefferedRender
 			position.w =
 				1f / Mathf.Max(visibleLight.range * visibleLight.range, 0.00001f);  //点光范围
 			otherLightPositions[index] = position;                                  //存储点光位置以及范围
-			otherLightSpotAngles[index] = new Vector4(0f, 1f);                      //与射灯进行区分的赋值
+			otherLightSpotAngles[index] = new Vector4(0f, 1f, -1);                      //与射灯进行区分的赋值
 			Vector4 dirAndmask = Vector4.zero;
 			dirAndmask.w = light.renderingLayerMask.ReinterpretAsFloat();
 			otherLightDirectionsAndMasks[index] = dirAndmask;
@@ -218,17 +218,21 @@ namespace DefferedRender
 			int depthId)
 		{
 			ClusterLight_VS clusterLight_VS = ClusterLight_VS.Instance;
-			if (camera.cameraType == CameraType.Game && setting.isUse && clusterLight_VS == null)
-			{
-				buffer.EnableShaderKeyword("_USE_CLUSTER");
+
+
+            if (camera.cameraType == CameraType.Game && setting.isUse && clusterLight_VS == null)
+            {
+                buffer.EnableShaderKeyword("_USE_CLUSTER");
 			}
             else
             {
-				buffer.DisableShaderKeyword("_USE_CLUSTER");
-				return;
-			}
+                buffer.DisableShaderKeyword("_USE_CLUSTER");
+                clusterLight_VS.DrawCluster();
+                return;
+            }
 
 			clusterLight_VS.ComputeLightCluster(buffer, setting, camera, depthId);
+			//clusterLight_VS.DrawCluster();
 		}
 	}
 }

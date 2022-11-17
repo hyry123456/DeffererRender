@@ -12,7 +12,7 @@ namespace DefferedRender
 
     /// <summary>/// 视角空间确定灯光裁剪Cluster /// </summary>
     [ExecuteInEditMode]
-	public class ClusterLight_VS : MonoBehaviour
+	public class ClusterLight_VS
 	{
 		private ComputeBuffer clusterBuffer;
 		private ComputeBuffer clusterCountBuffer;
@@ -26,12 +26,8 @@ namespace DefferedRender
         {
             get
             {
-                if (instance == null)
-                {
-					GameObject game = new GameObject("ClusterLight");
-					game.AddComponent<ClusterLight_VS>();
-					game.hideFlags = HideFlags.HideAndDontSave;
-                }
+				if(instance == null)
+					instance = new ClusterLight_VS();
                 return instance;
             }
         }
@@ -45,15 +41,6 @@ namespace DefferedRender
 			clusterArrayBufferId = Shader.PropertyToID("_ClusterArrayBuffer"),
 			viewToWorldMatrixId = Shader.PropertyToID("_ViewToWorldMat");
 
-        private void Awake()
-        {
-            if(instance != null)
-            {
-				DestroyImmediate(this);
-				return;
-            }
-			instance = this;
-        }
 
 		private ClusterLight_VS() { }
 
@@ -138,15 +125,9 @@ namespace DefferedRender
             buffer.SetGlobalBuffer(clusterCountBufferId, clusterCountBuffer);
 			buffer.SetGlobalBuffer(clusterArrayBufferId, clusterArrayBuffer);
 
-			//DrawCluster();
-		}
+            //DrawCluster();
+        }
 
-        private void OnDisable()
-        {
-			clusterBuffer?.Release();
-			clusterCountBuffer?.Release();
-			clusterArrayBuffer?.Release();
-		}
 
 #if UNITY_EDITOR
 		ClusterData[] clusters;
@@ -154,6 +135,7 @@ namespace DefferedRender
 
 		public void DrawCluster()
         {
+			if (clusterBuffer == null) return;
 			if(clusters == null || clusters.Length != clusterBuffer.count)
             {
 				clusters = new ClusterData[clusterBuffer.count];
@@ -177,7 +159,6 @@ namespace DefferedRender
 				Debug.DrawLine(cluster.p1, cluster.p2, color);
 				Debug.DrawLine(cluster.p2, cluster.p3, color);
 				Debug.DrawLine(cluster.p3, cluster.p0, color);
-
 				Debug.DrawLine(cluster.p4, cluster.p5, color);
 				Debug.DrawLine(cluster.p5, cluster.p6, color);
 				Debug.DrawLine(cluster.p6, cluster.p7, color);

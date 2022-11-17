@@ -22,8 +22,9 @@ namespace DefferedRender
                 boundMax = boundMax + transform.position,
                 boundMin = boundMin + transform.position,
             };
+            BulkLight bulkLight = BulkLight.CreateInstance();
             //只进行提交，提交后在切换场景时父类会自己清除
-            BulkLight.Instance.AddBulkLightBox(lightStruct);
+            bulkLight.AddBulkLightBox(lightStruct);
         }
 
         //private void OnDestroy()

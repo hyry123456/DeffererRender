@@ -29,20 +29,21 @@ RWStructuredBuffer<BulkLightStruct> _ClusterDataBuffer;
 int _BoxCount;
 
 bool CheckPositionInLight(float3 pos, int lightIndex) {
-	// return true;
 	float4 lightPos = _OtherLightPositions[lightIndex];
 	float3 ray = lightPos.xyz - pos;
+
+	if (dot(normalize(ray), _OtherLightDirectionsAndMasks[lightIndex].xyz)
+		< _OtherLightSpotAngles[lightIndex].z)
+		return false;
+
 	float disSqr = dot(ray, ray);
-
-	// if(dot(ray, _OtherLightDirectionsAndMasks[lightIndex].xyz) < _OtherLightSpotAngles[lightIndex].z)
-	// 	return false;
-
 	if (disSqr <= (1 / lightPos.w))
 		return true;
 
-
 	return false;
 }
+
+
 
 #pragma kernel CaculateBulkBox
 

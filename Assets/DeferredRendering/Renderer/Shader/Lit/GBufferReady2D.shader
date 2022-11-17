@@ -58,55 +58,55 @@ Shader "Defferer/GBufferReady2D"
 			ENDHLSL
         }
 
-		Pass {
-			Tags {
-				"LightMode" = "ShadowCaster"
-			}
+		//Pass {
+		//	Tags {
+		//		"LightMode" = "ShadowCaster"
+		//	}
 
-			ColorMask 0
-			Cull Off
-			
-			HLSLPROGRAM
-			#pragma target 3.5
-			#pragma shader_feature _ _SHADOWS_CLIP _SHADOWS_DITHER
-			#pragma shader_feature _CLIPPING
-			#pragma multi_compile _ LOD_FADE_CROSSFADE
-			#pragma multi_compile_instancing
-			#pragma vertex ShadowCasterPassVertex
-			#pragma fragment ShadowCasterPassFragment
-			#include "../Common/ShadowCasterPass.hlsl"
-			ENDHLSL
-		}
+		//	ColorMask 0
+		//	Cull Off
+		//	
+		//	HLSLPROGRAM
+		//	#pragma target 3.5
+		//	#pragma shader_feature _ _SHADOWS_CLIP _SHADOWS_DITHER
+		//	#pragma shader_feature _CLIPPING
+		//	#pragma multi_compile _ LOD_FADE_CROSSFADE
+		//	#pragma multi_compile_instancing
+		//	#pragma vertex ShadowCasterPassVertex
+		//	#pragma fragment ShadowCasterPassFragment
+		//	#include "../Common/ShadowCasterPass.hlsl"
+		//	ENDHLSL
+		//}
 
-		Pass{		//透明渲染Pass
-			Tags {
-                "LightMode" = "FowardShader"
-            }
+		//Pass{		//透明渲染Pass
+		//	Tags {
+  //              "LightMode" = "FowardShader"
+  //          }
 
-			Blend SrcAlpha OneMinusSrcAlpha
-			ZWrite Off
-			Cull Off
+		//	Blend SrcAlpha OneMinusSrcAlpha
+		//	ZWrite Off
+		//	Cull Off
 
-            HLSLPROGRAM
-            #pragma vertex LitPassVertex
-            #pragma fragment LitPassFragment
+  //          HLSLPROGRAM
+  //          #pragma vertex LitPassVertex
+  //          #pragma fragment LitPassFragment
 
-			#pragma target 3.5
-			#pragma shader_feature _CLIPPING
-			#pragma shader_feature _MASK_MAP
-			#pragma shader_feature _NORMAL_MAP
-			#pragma shader_feature _DETAIL_MAP
-			#pragma multi_compile _ LIGHTMAP_ON
+		//	#pragma target 3.5
+		//	#pragma shader_feature _CLIPPING
+		//	#pragma shader_feature _MASK_MAP
+		//	#pragma shader_feature _NORMAL_MAP
+		//	#pragma shader_feature _DETAIL_MAP
+		//	#pragma multi_compile _ LIGHTMAP_ON
 
-			#pragma multi_compile _ _USE_CLUSTER
-			#pragma multi_compile _ _DIRECTIONAL_PCF3 _DIRECTIONAL_PCF5 _DIRECTIONAL_PCF7
-			#pragma multi_compile _ _OTHER_PCF3 _OTHER_PCF5 _OTHER_PCF7
-			#pragma multi_compile _ _CASCADE_BLEND_SOFT _CASCADE_BLEND_DITHER
-			
-			#pragma multi_compile_instancing
-			#include "HLSL/Transperant2DPass.hlsl"
-			ENDHLSL
-		}
+		//	#pragma multi_compile _ _USE_CLUSTER
+		//	#pragma multi_compile _ _DIRECTIONAL_PCF3 _DIRECTIONAL_PCF5 _DIRECTIONAL_PCF7
+		//	#pragma multi_compile _ _OTHER_PCF3 _OTHER_PCF5 _OTHER_PCF7
+		//	#pragma multi_compile _ _CASCADE_BLEND_SOFT _CASCADE_BLEND_DITHER
+		//	
+		//	#pragma multi_compile_instancing
+		//	#include "HLSL/Transperant2DPass.hlsl"
+		//	ENDHLSL
+		//}
 
     }
 }

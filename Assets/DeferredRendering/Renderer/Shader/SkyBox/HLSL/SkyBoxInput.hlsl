@@ -20,6 +20,8 @@ float _HorizonIntensity, _HorizonHeight, _MidLightIntensity, _HorizonBrightness;
 float3 _MoonColor, _SunColor;
 float3 _HorizonColorDay, _HorizonLightDay, _HorizonColorNight, _HorizonLightNight;
 
+float _SkyUVScale;
+
 CBUFFER_END
 
 

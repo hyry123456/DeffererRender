@@ -40,6 +40,7 @@ Material:
     - _MidLightIntensity: 5
     - _MoonOffset: -0.1
     - _MoonRadius: 0.1
+    - _SkyUVScale: 0.5
     - _StarsCutoff: 0.085
     - _StarsFrequency: 1.45
     - _StarsSpeed: -3

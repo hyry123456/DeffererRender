@@ -12,7 +12,6 @@ namespace DefferedRender
         public Vector4 lightIndex;
     };
 
-    [ExecuteInEditMode]
     /// <summary> 
     /// 绘制非视角空间体积光用到的类，将所有的Cluster数据传入，进行体积光绘制
     /// </summary>
@@ -23,29 +22,42 @@ namespace DefferedRender
         {
             get 
             {
-                if(instance == null)
-                {
-                    GameObject game = new GameObject("BulkLight");
-                    game.AddComponent<BulkLight>();
-                }
                 return instance;
             }
         }
 
+        public static BulkLight CreateInstance()
+        {
+            if (instance == null)
+            {
+                GameObject game = new GameObject("BulkLight");
+                game.AddComponent<BulkLight>();
+                game.hideFlags = HideFlags.HideAndDontSave;
+            }
+            return instance;
+        }
+
+        public static bool UseBulkLight
+        {
+            get
+            {
+                if (instance == null)
+                    return false;
+                return true;
+            }
+        }
+
+        [SerializeField]
         List<BulkLightStruct> drawing 
             = new List<BulkLightStruct>();
 
+        [SerializeField]
         List<BulkLightStruct> waiting
-            = new List<BulkLightStruct>();
-
-        List<BulkLightStruct> waitRemove
             = new List<BulkLightStruct>();
 
         ComputeBuffer boxsBuffer;
         BulkLightAssets lightAssets;
         int kernel;
-
-        //public int boxCount;
 
         private void Awake()
         {
@@ -67,15 +79,18 @@ namespace DefferedRender
             boxsBuffer = null;
             waiting.Clear();
             drawing.Clear();
-            instance = null;
+            //是该物体被删除才进行删除
+            if(instance.gameObject == gameObject)
+                instance = null;
+
         }
 
         public void AddBulkLightBox(BulkLightStruct bulkLight)
         {
             if(waiting.Count == 0)
             {
-                Common.SustainCoroutine.Instance.AddCoroutine(RecaculateBulkLight);
                 waiting.Add(bulkLight);
+                Common.SustainCoroutine.Instance.AddCoroutine(RecaculateBulkLight);
             }
             else
             {
@@ -86,9 +101,6 @@ namespace DefferedRender
 
         private bool RecaculateBulkLight()
         {
-            if (waiting == null || waiting.Count == 0)
-                return true;
-
             if(boxsBuffer == null)
             {
                 boxsBuffer = new ComputeBuffer(drawing.Count + waiting.Count,
@@ -122,10 +134,8 @@ namespace DefferedRender
                boxsBuffer.count / 64 + 1, 1, 1);
 
             buffer.SetGlobalBuffer("_ClusterDataBuffer", boxsBuffer);
-
             buffer.DrawProcedural(Matrix4x4.identity, lightAssets.material,
                 0, MeshTopology.Points, 1, boxsBuffer.count);
-            //boxCount = boxsBuffer.count;
         }
 
 

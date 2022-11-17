@@ -1,4 +1,4 @@
-Shader "UI/UIFont"
+Shader "Defferer/UI/UIFont"
 {
     Properties
     {
