@@ -58,5 +58,5 @@ Material:
     - _NightBottomColor: {r: 0, g: 0.1, b: 0.14, a: 1}
     - _NightTopColor: {r: 0, g: 0.2037736, b: 0.2264151, a: 1}
     - _StarsSkyColor: {r: 0, g: 1, b: 0.5, a: 1}
-    - _SunColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SunColor: {r: 2, g: 2, b: 2, a: 1}
   m_BuildTextureStacks: []

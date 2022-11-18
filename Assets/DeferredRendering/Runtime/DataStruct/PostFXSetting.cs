@@ -8,6 +8,11 @@ namespace DefferedRender
 	{
 		[SerializeField]
 		Shader postFXShader = default;
+
+		[SerializeField]
+		ComputeShader compute = default;
+		public ComputeShader ComputeShader => compute;
+
         public enum LUTSize { 
 			_16x = 16, _32x = 32, _64x = 64
 		}
@@ -29,10 +34,25 @@ namespace DefferedRender
             [Range(0, 1)]
 			public float bilaterFilterFactor;
 			[Range(0, 5)]
-			public float blurRadius;
+			public int blurRadius;
 		}
 
-			[SerializeField]
+		int ssrKernel = -1;
+		public bool UseSSR()
+        {
+			return ssr.useSSR && compute != null;
+        }
+		public int SSR_Kernel
+        {
+			get
+            {
+				if (ssrKernel == -1)
+					ssrKernel = compute.FindKernel("SSR");
+				return ssrKernel;
+            }
+        }
+
+		[SerializeField]
 		SSR ssrSetting = new SSR
 		{
 			rayMarchingSetp = 36,
@@ -69,8 +89,6 @@ namespace DefferedRender
 			shrinkRadio = 0.00005f,
 			checkDistance = 100,
 			circleCount = 64,
-			//bilaterFilterStrength = 0.25f,
-			//biurRadius = 5
 		};
 		public BulkLight BulkLighting => bulkLight;
 
@@ -79,38 +97,28 @@ namespace DefferedRender
 		[System.Serializable]
 		public struct BloomSettings
 		{
-
 			/// <summary>		/// 渐变等级		/// </summary>
 			[Range(0f, 16f)]
 			public int maxIterations;
-
 			/// <summary>		/// Bloom进行到最小的像素，像素量小于该值就不进行下一步		/// </summary>
 			[Min(1f)]
 			public int downscaleLimit;
-
 			/// <summary>		/// 是否使用三线性插值		/// </summary>
 			public bool bicubicUpsampling;
-
 			/// <summary>		/// Bloom的分割线		/// </summary>
 			[Min(0f)]
 			public float threshold;
-
 			/// <summary>		/// 分割线下降的剧烈程度，不是直接截断		/// </summary>
 			[Range(0f, 1f)]
 			public float thresholdKnee;
-
 			/// <summary>		/// Bloom叠加在主纹理的强度		/// </summary>
 			[Min(0f)]
 			public float intensity;
-
 			/// <summary>		/// 是否使用范围颜色限制，即进行颜色限制时采样了周围的颜色		/// </summary>
 			public bool fadeFireflies;
-
 			/// <summary>		/// Bloom的混合模式，是添加还是lerp混合		/// </summary>
 			public enum Mode { Additive, Scattering }
-
 			public Mode mode;
-
 			/// <summary>		/// lerp混合的比例		/// </summary>
 			[Range(0.05f, 0.95f)]
 			public float scatter;
@@ -143,7 +151,6 @@ namespace DefferedRender
         ToneMappingSettings toneMapping = default;
 
 		public ToneMappingSettings ToneMapping => toneMapping;
-
 
 		/// <summary>	/// 颜色值调整	/// </summary>
 		[Serializable]
@@ -219,10 +226,6 @@ namespace DefferedRender
 		};
 
 		public SplitToningSettings SplitToning => splitToning;
-
-
-
-
 
 		/// <summary>		/// 三种抗锯齿模式		/// </summary>
 		public enum LuminanceMode { None, Green, Calculate }
@@ -302,7 +305,6 @@ namespace DefferedRender
 
 		public DepthOfFieldSetting DepthOfField => depthOfField;
 
-
 		Material material;
 
 		public Material Material
@@ -317,5 +319,10 @@ namespace DefferedRender
 				return material;
 			}
 		}
-	}
+
+        private void OnValidate()
+        {
+			ssrKernel = -1;
+        }
+    }
 }

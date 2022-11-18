@@ -2,7 +2,13 @@
 #define DEFFER_NOISE_WATER
 
 #include "CS_ParticleInput.hlsl"
-#include "../../../ShaderLibrary/Fragment.hlsl"
+#include "../../ShaderLibrary/Surface.hlsl"
+#include "../../ShaderLibrary/Fragment.hlsl"
+#include "../../ShaderLibrary/Shadows.hlsl"
+#include "../../ShaderLibrary/Light.hlsl"
+#include "../../ShaderLibrary/BRDF.hlsl"
+#include "../../ShaderLibrary/GI.hlsl"
+#include "../../ShaderLibrary/Lighting.hlsl"
 
 
 //液体粒子需要的数据
@@ -243,17 +249,17 @@ float3 GetNormalTS (float4 uv, float interpolation) {
 	return normal;
 }
 
-float4 NormalFrag(FluidFragInput input) : SV_TARGET{
+float2 NormalFrag(FluidFragInput input) : SV_TARGET{
     float4 color = GetBaseColor(input.uv, input.interpolation);
     clip(color.a - 0.05);
     #ifdef _NORMAL_MAP
         float3 normal = GetNormalTS(input.uv, input.interpolation);
         normal = normalize(float3(dot(input.TtoW0, normal), 
             dot(input.TtoW1, normal), dot(input.TtoW2, normal)));
-        return float4(normal * 0.5 + 0.5, 1);
+        return PackNormalOct(normal);
     #else
         float3 normal = normalize(float3(input.TtoW0.z, input.TtoW1.z, input.TtoW2.z));
-        return float4(normal * 0.5 + 0.5, 1);
+        return PackNormalOct(normal);
     #endif
 }
 
@@ -393,31 +399,51 @@ float BilateralDepthFilterFragment (Varyings input) : SV_DEPTH{
 }
 
 float4 _WaterColor;
-float3 _SpecularData;
+float2 _SpecularData;
+float4x4 _InverseVPMatrix;
+TEXTURE2D(_GBufferRT0);
+TEXTURE2D(_GBufferRT3);
 
+float3 GetWorldPos(float depth, float2 uv){
+    #if defined(UNITY_REVERSED_Z)
+        depth = 1 - depth;
+    #endif
+	float4 ndc = float4(uv.x * 2 - 1, uv.y * 2 - 1, depth * 2 - 1, 1);
 
-void BlendToTargetFrag(Varyings input,
-        out float4 _GBufferColorTex : SV_Target0,
-        out float4 _GBufferNormalTex : SV_Target1,
-        out float4 _GBufferSpecularTex : SV_Target2,
-        out float4 _GBufferBakeTex : SV_Target3,
-		out float4 _ReflectTargetTex : SV_Target4){
-    float bufferDepth1 = SAMPLE_DEPTH_TEXTURE_LOD(_CameraDepth, 
-        sampler_point_clamp, input.screenUV, 0);
-    float bufferDepth2 = SAMPLE_DEPTH_TEXTURE_LOD(_WaterDepth, 
-        sampler_point_clamp, input.screenUV, 0);
+	float4 worldPos = mul(_InverseVPMatrix, ndc);
+	worldPos /= worldPos.w;
+	return worldPos.xyz;
+}
 
-    if(bufferDepth1 != bufferDepth2) bufferDepth2 += 0.008f;
-    clip(bufferDepth2 - bufferDepth1);
-
-    float width = smoothstep(0, _MaxFluidWidth, SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.screenUV));
+float4 BlendToTargetFrag(Varyings input) : SV_TARGET
+{
+    float width = smoothstep(0, _MaxFluidWidth * 2, SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.screenUV).r);
     clip(width - _CullOff);
-    float3 normal = SAMPLE_TEXTURE2D(_NormalMap, sampler_MainTex, input.screenUV);
-    normal = normal * 0.5 + 0.5;
-    // width *= _WaterColor.w;
-    _GBufferColorTex = float4(_WaterColor.xyz, width * _WaterColor.w);
-    _GBufferNormalTex = float4(normal, width);
-    _GBufferSpecularTex = float4(_SpecularData, width);
+    float depth = SAMPLE_DEPTH_TEXTURE(_WaterDepth, sampler_point_clamp, input.screenUV);
+    float eyeDepth = LinearEyeDepth(depth, _ZBufferParams);
+    float2 normalOct = SAMPLE_TEXTURE2D(_NormalMap, sampler_linear_clamp, input.screenUV).xy;
+    float3 normal = normalize(UnpackNormalOct(normalOct));
+    float3 position = GetWorldPos(depth, input.screenUV);
+
+    float2 offsetSize = _CameraBufferSize.zw / 100;
+    float3 color = SAMPLE_TEXTURE2D(_GBufferRT0, sampler_linear_clamp, input.screenUV + normalOct * _CameraBufferSize.xy * offsetSize * width).rgb;
+    float3 reflect = SAMPLE_TEXTURE2D(_GBufferRT3, sampler_linear_clamp, input.screenUV + normalOct * _CameraBufferSize.xy * offsetSize * width).rgb;
+
+    Surface surface = (Surface)0;
+    surface.position = position;
+    surface.normal = normal;     //法线
+    surface.viewDirection = normalize(_WorldSpaceCameraPos - surface.position);                                     //视线方向
+    surface.depth = eyeDepth;                                                                                    //深度
+    surface.metallic = _SpecularData.x;
+    surface.roughness = _SpecularData.y;
+	surface.ambientOcclusion = 1;
+	surface.color = color * _WaterColor;
+
+    float3 uv_Depth = float3(input.screenUV, eyeDepth);
+    color = GetGBufferLight(surface, uv_Depth);
+    // color.xyz += reflect * surface.color;
+
+    return float4(color, width);
 }
 
 float WriteDepth(Varyings input): SV_DEPTH
@@ -427,7 +453,6 @@ float WriteDepth(Varyings input): SV_DEPTH
     float bufferDepth2 = SAMPLE_DEPTH_TEXTURE_LOD(_WaterDepth, 
         sampler_point_clamp, input.screenUV, 0);
     
-    clip(bufferDepth2 - bufferDepth1);
     float width = smoothstep(0, _MaxFluidWidth * 2, SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.screenUV));
     clip(width - _CullOff);
 

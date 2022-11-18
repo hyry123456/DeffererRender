@@ -98,3 +98,60 @@ void Water_PerFixFrame(int3 gid : SV_GroupID, int index : SV_GroupIndex){
     }
 
 }
+
+
+#pragma kernel BlendDepth_Nomral_Albedo
+
+RWTexture2D<float4> _GBufferRT0;
+RWTexture2D<float2> _GBufferRT1;
+RWTexture2D<float4> _GBufferRT2;
+RWTexture2D<float> _GBufferDepthTex;
+
+Texture2D<float2> _NormalMap;
+Texture2D<float> _WidthMap;
+Texture2D<float> _WaterDepth;
+float4 _WaterDepth_TexelSize;
+// float _BilaterFilterFactor;
+// float4 _BlurRadius;
+float _MaxFluidWidth;
+float _CullOff;
+
+uint2 _GBufferPixelCount;
+uint2 _WaterPixelCount;
+float2 _SpecularData;
+float3 _WaterColor;
+
+// static half3 UnpackNormalOct(half2 e){
+//     half3 v = half3(e.xy,1 - abs(e.x) - abs(e.y));
+//     if(v.z <= 0){
+//         v.xy = signNotZero(v.xy) *(1 - abs(v.yx));
+//     }
+//     return normalize(v);
+// }
+
+[numthreads(32, 32, 1)]
+void BlendDepth_Nomral_Albedo(uint3 id : SV_DispatchThreadID){
+    //大于范围就退出
+    if(id.x >= _GBufferPixelCount.x || id.y >= _GBufferPixelCount.y)
+        return;
+    int2 waterId = ((float2)id.xy / (float2)_GBufferPixelCount) * _WaterPixelCount;
+
+    float width = smoothstep(0, _MaxFluidWidth * 2, _WidthMap[waterId]);
+    if(width < _CullOff) return;
+
+    float2 normalOct = _GBufferRT1[id.xy];
+    float2 targetNor = _NormalMap[waterId];
+
+    float4 rt0 = _GBufferRT0[id.xy];
+    float4 targetRT0 = float4(rt0.xyz * _WaterColor, _SpecularData.x);
+
+    float4 rt2 = _GBufferRT2[id.xy];
+    rt2.w = lerp(rt2.w, _SpecularData.y, width);
+
+    float depth = _WaterDepth[waterId];
+    float bufferDepth = _GBufferDepthTex[id.xy];
+
+    _GBufferRT0[id.xy] = lerp(rt0, targetRT0, width);
+    _GBufferRT1[id.xy] = lerp(normalOct, targetNor, width);
+    _GBufferRT2[id.xy] = rt2;
+}

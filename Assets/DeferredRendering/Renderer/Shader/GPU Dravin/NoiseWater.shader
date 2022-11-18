@@ -99,6 +99,7 @@ Shader "Defferer/Fluid Draw"
 
             #include "HLSL/NoiseWater.hlsl"
 
+			#pragma multi_compile _ _USE_CLUSTER
             #pragma vertex DefaultPassVertex
             #pragma fragment BlendToTargetFrag
 
@@ -136,7 +137,7 @@ Shader "Defferer/Fluid Draw"
         Pass{
             Name "Write Depth"
             ZWrite On
-            ZTest Off
+            ZTest On
             Cull Off
             HLSLPROGRAM
 

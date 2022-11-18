@@ -49,10 +49,12 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Floats:
     - _Clipping: 1
-    - _Cutoff: 0.5
+    - _CullBack: 0
+    - _Cutoff: 0.1
     - _DetailAlbedo: 1
     - _DetailMapToggle: 0
     - _DetailNormalScale: 1
+    - _DetailRoughness: 1
     - _DetailSmoothness: 1
     - _DstBlend: 0
     - _Fresnel: 1
@@ -60,13 +62,14 @@ Material:
     - _Metallic: 0
     - _NormalMapToggle: 0
     - _NormalScale: 1
+    - _Roughness: 0
     - _Smoothness: 0
     - _SrcBlend: 1
     - _Width: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    - _Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 1.0326958, g: 1.0326958, b: 1.0326958, a: 0}
     - _ShiftColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_BuildTextureStacks: []

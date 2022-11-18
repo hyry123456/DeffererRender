@@ -18,13 +18,12 @@ UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _WaterTex_ST)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _WaterColor)
-	UNITY_DEFINE_INSTANCED_PROP(float4, _ShiftColor)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Width)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _EmissionColor)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Metallic)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Smoothness)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Fresnel)
+	UNITY_DEFINE_INSTANCED_PROP(float, _WaterMetallic)
+	UNITY_DEFINE_INSTANCED_PROP(float, _Roughness)
+	UNITY_DEFINE_INSTANCED_PROP(float, _WaterRoughness)
 	UNITY_DEFINE_INSTANCED_PROP(float, _NormalScale)
 
 	UNITY_DEFINE_INSTANCED_PROP(float4, _OffsetSize)
@@ -76,10 +75,6 @@ float3 GetNormalTS (float2 uv) {
 	return normal;
 }
 
-float GetWidth(){
-	return INPUT_PROP(_Width);
-}
-
 
 float3 GetEmission (float2 uv) {
 	float4 map = SAMPLE_TEXTURE2D(_EmissionMap, sampler_MainTex, uv);
@@ -92,19 +87,29 @@ float GetMetallic () {
 	return metallic;
 }
 
-float GetSmoothness () {
-	float smoothness = INPUT_PROP(_Smoothness);
+float GetRoughness () {
+	float roughness = INPUT_PROP(_Roughness);
 	
-	return smoothness;
+	return roughness;
 }
 
-float GetFresnel () {
-	return INPUT_PROP(_Fresnel);
+float GetWaterMetallic () {
+	float metallic = INPUT_PROP(_WaterMetallic);
+	return metallic;
 }
 
-float4 GetShiftColor(){
-	return INPUT_PROP(_ShiftColor);
+float GetWaterRoughness () {
+	float roughness = INPUT_PROP(_WaterRoughness);
+	
+	return roughness;
 }
 
+// float GetOcclusion(InputConfig c){
+// 	float occlusion = 1;
+// 	if(c.useMask){
+// 		occlusion = GetMask(c).a;
+// 	}
+// 	return occlusion;
+// }
 
 #endif

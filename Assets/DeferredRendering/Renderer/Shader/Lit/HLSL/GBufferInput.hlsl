@@ -3,7 +3,7 @@
 
 
 TEXTURE2D(_MainTex);
-TEXTURE2D(_MaskMap);
+TEXTURE2D(_MaskMap);		//r:metallic Mask, g:roughness Mask, b:main Mask, a:AO
 TEXTURE2D(_NormalMap);
 TEXTURE2D(_EmissionMap);
 SAMPLER(sampler_MainTex);
@@ -18,15 +18,12 @@ UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _MainTex_ST)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _DetailMap_ST)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
-	UNITY_DEFINE_INSTANCED_PROP(float4, _ShiftColor)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Width)
 	UNITY_DEFINE_INSTANCED_PROP(float4, _EmissionColor)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Metallic)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Smoothness)
-	UNITY_DEFINE_INSTANCED_PROP(float, _Fresnel)
+	UNITY_DEFINE_INSTANCED_PROP(float, _Roughness)
 	UNITY_DEFINE_INSTANCED_PROP(float, _DetailAlbedo)
-	UNITY_DEFINE_INSTANCED_PROP(float, _DetailSmoothness)
+	UNITY_DEFINE_INSTANCED_PROP(float, _DetailRoughness)
 	UNITY_DEFINE_INSTANCED_PROP(float, _DetailNormalScale)
 	UNITY_DEFINE_INSTANCED_PROP(float, _NormalScale)
 
@@ -75,14 +72,6 @@ float4 GetDetail (InputConfig c) {
 	return 0.0;
 }
 
-float4 GetShiftColor(InputConfig c){
-	return INPUT_PROP(_ShiftColor);
-}
-
-float GetWidth(InputConfig c){
-	return INPUT_PROP(_Width);
-}
-
 float4 GetBase (InputConfig c) {
 	float4 map = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, c.baseUV);
 	float4 color = INPUT_PROP(_Color);
@@ -128,22 +117,26 @@ float GetMetallic (InputConfig c) {
 	return metallic;
 }
 
-float GetSmoothness (InputConfig c) {
-	float smoothness = INPUT_PROP(_Smoothness);
-	smoothness *= GetMask(c).a;
+float GetRoughness (InputConfig c) {
+	float roughness = INPUT_PROP(_Roughness);
+	roughness *= GetMask(c).g;
 
 	if (c.useDetail) {
-		float detail = GetDetail(c).b * INPUT_PROP(_DetailSmoothness);
-		float mask = GetMask(c).b;
-		smoothness =
-			lerp(smoothness, detail < 0.0 ? 0.0 : 1.0, abs(detail) * mask);
+		float detail = GetDetail(c).b * INPUT_PROP(_DetailRoughness);
+		float mask = GetMask(c).g;
+		roughness =
+			lerp(roughness, detail < 0.0 ? 0.0 : 1.0, abs(detail) * mask);
 	}
 	
-	return smoothness;
+	return roughness;
 }
 
-float GetFresnel (InputConfig c) {
-	return INPUT_PROP(_Fresnel);
+float GetOcclusion(InputConfig c){
+	float occlusion = 1;
+	if(c.useMask){
+		occlusion = GetMask(c).a;
+	}
+	return occlusion;
 }
 
 #endif

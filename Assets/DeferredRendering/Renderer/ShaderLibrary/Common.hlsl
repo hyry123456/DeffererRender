@@ -59,6 +59,31 @@ float3 DecodeNormal (float4 sample, float scale) {
 	#endif
 }
 
+float signNotZero(float f){
+  return(f >= 0.0) ? 1.0 : -1.0;
+}
+float2 signNotZero(float2 v) {
+  return float2(signNotZero(v.x), signNotZero(v.y));
+}
+
+static half2 PackNormalOct(half3 normalWS){
+    half l = dot(abs(normalWS),1); //l = abs(x) + abs(y) + abs(z)
+    half3 normalOct = normalWS * rcp(l); //投影到八面体
+    if(normalWS.z > 0){ //八面体的上部分投影到xy平面
+        return normalOct.xy; 
+    }else{ //八面体下部分按对角线翻转投影到xy平面
+        return (1 - abs(normalOct.yx)) * signNotZero(normalOct.xy);
+    }
+}
+
+static half3 UnpackNormalOct(half2 e){
+    half3 v = half3(e.xy,1 - abs(e.x) - abs(e.y));
+    if(v.z <= 0){
+        v.xy = signNotZero(v.xy) *(1 - abs(v.yx));
+    } 
+    return normalize(v);
+}
+
 float3 NormalTangentToWorld (float3 normalTS, float3 normalWS, float4 tangentWS) {
 	float3x3 tangentToWorld =
 		CreateTangentToWorld(normalWS, tangentWS.xyz, tangentWS.w);

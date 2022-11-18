@@ -54,12 +54,12 @@ Varyings LitPassVertex (Attributes input) {
 }
 
 void LitPassFragment (Varyings input,
-        out float4 _GBufferColorTex : SV_Target0,
-        out float4 _GBufferNormalTex : SV_Target1,
-        out float4 _GBufferSpecularTex : SV_Target2,
-        out float4 _GBufferBakeTex : SV_Target3,
-		out float4 _ReflectTargetTex : SV_Target4
-    ) {
+        out float4 _GBufferRT0 : SV_Target0,	//rgb:abledo,w:metalness
+        out float2 _GBufferRT1 : SV_Target1,	//R,G:EncodeNormal
+        out float4 _GBufferRT2 : SV_Target2,	//rgb:emissive,w:roughness
+        out float4 _GBufferRT3 : SV_Target3	//rgb:reflect,w:AO
+    ) 
+	{
 	UNITY_SETUP_INSTANCE_ID(input);
 	InputConfig config = GetInputConfig(input.baseUV);
 	ClipLOD(input.positionCS_SS.xy, unity_LODFade.x);
@@ -74,7 +74,6 @@ void LitPassFragment (Varyings input,
 	
 	//纹理颜色
 	float4 base = GetBase(config);
-	float3 positionWS = float3(input.TtoW0.w, input.TtoW1.w, input.TtoW2.w);
 	#if defined(_CLIPPING)
 		clip(base.a - GetCutoff(config));
 	#endif
@@ -87,27 +86,31 @@ void LitPassFragment (Varyings input,
 	#else
 		normal = normalize(perNormal);
 	#endif
+	half2 normalOct = PackNormalOct(normal);
+	float metallic = GetMetallic(config);
 
-	float width = GetWidth(config);
-	float4 specularData = float4(GetMetallic(config), GetSmoothness(config), GetFresnel(config), width);		//w赋值为1表示开启PBR
+	float3 positionWS = float3(input.TtoW0.w, input.TtoW1.w, input.TtoW2.w);
+	float3 emissive = GetEmission(config);
+	float roughness = GetRoughness(config);
+	float ao = GetOcclusion(config);
+	float3 sh = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal) * ao;
+	// float3 sh = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
+	half oneMinusReflectivity = (1 - metallic) * 0.96;
+	//计算漫反射率，实际上F0时的漫反射系数，也就是确定漫反射颜色，如果金属度高，那么就说明漫反射很弱，直接就是值为0
+	half3 diffColor = base.rgb * oneMinusReflectivity;
+	sh *= diffColor;
+	emissive += sh;		//计算过OA的间接光数据，之后直接加上去就行了
+	
+	float3 viewDir = normalize(_WorldSpaceCameraPos - positionWS);
+	float3 reflect_dir = reflect(-viewDir, normal);		
+	float mip_Level = metallic * (1.7 - 0.7 * metallic);
+	float3 refl = ComputeIndirectSpecular(reflect_dir, positionWS, mip_Level);
 
-	//烘焙灯光，只处理了烘焙贴图，没有处理阴影烘焙，需要注意
-	float3 bakeColor = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
-	float oneMinusReflectivity = OneMinusReflectivity(specularData.r);
-	float3 diffuse = base.rgb * oneMinusReflectivity;
-	bakeColor = bakeColor * diffuse + GetEmission(config);				//通过金属度缩减烘焙光，再加上自发光，之后会在着色时直接加到最后的结果上
-	float4 shiftColor = GetShiftColor(config);			//分别使用三张图的透明通道写入
 
-	float3 reflectDir = reflect( normalize((positionWS - _WorldSpaceCameraPos)), normal);
-
-	float3 reflect = ComputeIndirectSpecular(reflectDir, positionWS);
-
-	_GBufferColorTex = float4(base.xyz, shiftColor.x);
-	_GBufferNormalTex = float4(normal * 0.5 + 0.5, shiftColor.y);
-	_GBufferSpecularTex = specularData;
-
-	_ReflectTargetTex = float4(reflect, 1);
-	_GBufferBakeTex = float4(bakeColor, shiftColor.z);
+	_GBufferRT0 = float4(base.rgb, metallic);
+	_GBufferRT1 = normalOct;
+	_GBufferRT2 = float4(emissive, roughness);
+	_GBufferRT3 = float4(refl, ao);
 }
 
 

@@ -52,7 +52,7 @@ namespace DefferedRender
         ComputeBuffer particleBuffer;
         ComputeBuffer groupBuffer;
         ComputeBuffer collsionBuffer;
-        int kernel_Perframe, kernel_PerFixframe;
+        int kernel_Perframe, kernel_PerFixframe, kernel_Blend;
         [SerializeField]
         ComputeShader compute;
         [SerializeField]
@@ -78,7 +78,7 @@ namespace DefferedRender
             depthTexId = Shader.PropertyToID("FluidDepthTex"),
             tempWidthTexId = Shader.PropertyToID("TempWidthTex"),
             tempNormalTexId = Shader.PropertyToID("TempNormalTex"),
-            tempDepthTexId = Shader.PropertyToID("TempDepthTex"),
+            //tempDepthTexId = Shader.PropertyToID("TempDepthTex"),
 
             bufferSizeId = Shader.PropertyToID("_CameraBufferSize"),
             mainTexId = Shader.PropertyToID("_MainTex"),
@@ -90,7 +90,7 @@ namespace DefferedRender
             bilaterFilterFactorId = Shader.PropertyToID("_BilaterFilterFactor"),
             blurRadiusId = Shader.PropertyToID("_BlurRadius"),
             waterDepthId = Shader.PropertyToID("_WaterDepth"),
-            cameraDepthId = Shader.PropertyToID("_CameraDepth"),
+            //cameraDepthId = Shader.PropertyToID("_CameraDepth"),
             waterColorId = Shader.PropertyToID("_WaterColor"),
             maxFluidWidthId = Shader.PropertyToID("_MaxFluidWidth"),
             cullOffId = Shader.PropertyToID("_CullOff"),
@@ -132,6 +132,7 @@ namespace DefferedRender
 
             kernel_Perframe = compute.FindKernel("Water_PerFrame");
             kernel_PerFixframe = compute.FindKernel("Water_PerFixFrame");
+            kernel_Blend = compute.FindKernel("BlendDepth_Nomral_Albedo");
             ReadyMaterial();
             ReadyBuffer();
             index = 0;
@@ -350,31 +351,25 @@ namespace DefferedRender
         }
 
         public void IFluidDraw(ScriptableRenderContext context, CommandBuffer buffer,
-            RenderTargetIdentifier[] gBuffers, int gBufferDepth, int width, int height)
+            int gBufferDepth, int width, int height, int dest)
         {
-            float pixelScale = 0.7f;
+            float pixelScale = 0.5f;
             int bufferWidth = (int)(pixelScale * width),
                 bufferHeight = (int)(pixelScale * height);
             buffer.GetTemporaryRT(widthTexId, bufferWidth, bufferHeight, 0,
                 FilterMode.Bilinear, RenderTextureFormat.RFloat);
             buffer.GetTemporaryRT(normalTexId, bufferWidth, bufferHeight, 0,
-                FilterMode.Bilinear, RenderTextureFormat.Default);
+                FilterMode.Bilinear, RenderTextureFormat.RG32);
             buffer.GetTemporaryRT(depthTexId, bufferWidth, bufferHeight, 32,
-                FilterMode.Point, RenderTextureFormat.Depth);
-            buffer.GetTemporaryRT(cameraDepthId, bufferWidth, bufferHeight, 32,
                 FilterMode.Point, RenderTextureFormat.Depth);
 
             buffer.GetTemporaryRT(tempWidthTexId, bufferWidth, bufferHeight, 0,
                 FilterMode.Point, RenderTextureFormat.RFloat);
             buffer.GetTemporaryRT(tempNormalTexId, bufferWidth, bufferHeight, 0,
-                FilterMode.Point, RenderTextureFormat.Default);
-            buffer.GetTemporaryRT(tempDepthTexId, bufferWidth, bufferHeight, 32,
-                FilterMode.Point, RenderTextureFormat.Depth);
+                FilterMode.Point, RenderTextureFormat.RG32);
 
             buffer.SetGlobalTexture(mainTexId, gBufferDepth);
             buffer.Blit(null, depthTexId, material, (int)FluidPass.CopyDepth);
-            //渲染时用来对比用的深度图
-            buffer.Blit(null, cameraDepthId, material, (int)FluidPass.CopyDepth);
 
             buffer.SetGlobalTexture(mainTexId, mainTex);
             buffer.SetGlobalTexture(normalMapId, normalTex);
@@ -411,46 +406,27 @@ namespace DefferedRender
                 buffer.Blit(null, tempWidthTexId, material, (int)FluidPass.Bilater);
                 buffer.SetGlobalTexture(mainTexId, normalTexId);
                 buffer.Blit(null, tempNormalTexId, material, (int)FluidPass.Bilater);
-                buffer.SetGlobalTexture(waterDepthId, depthTexId);
-                buffer.Blit(null, tempDepthTexId, material, (int)FluidPass.BilaterDepth);
 
                 buffer.SetGlobalVector(blurRadiusId, new Vector4(0, waterSetting.blurRadius));
                 buffer.SetGlobalTexture(mainTexId, tempNormalTexId);
                 buffer.Blit(null, normalTexId, material, (int)FluidPass.Bilater);
                 buffer.SetGlobalTexture(mainTexId, tempWidthTexId);
                 buffer.Blit(null, widthTexId, material, (int)FluidPass.Bilater);
-                buffer.SetGlobalTexture(waterDepthId, tempDepthTexId);
-                buffer.Blit(null, depthTexId, material, (int)FluidPass.BilaterDepth);
             }
 
-            //设置渲染目标，传递所有的渲染目标
-            buffer.SetRenderTarget(
-                gBuffers,
-                gBufferDepth
-            );
-
-            buffer.SetGlobalTexture(waterDepthId, depthTexId); 
+            buffer.SetGlobalTexture(waterDepthId, depthTexId);
             buffer.SetGlobalTexture(normalMapId, normalTexId);
-            buffer.SetGlobalTexture(mainTexId, widthTexId);
             buffer.SetGlobalColor(waterColorId, waterSetting.waterCol);
             buffer.SetGlobalFloat(maxFluidWidthId, waterSetting.maxFluidWidth);
             buffer.SetGlobalFloat(cullOffId, waterSetting.cullOff);
-            buffer.SetGlobalVector(specularDataId, new Vector3(waterSetting.metallic, 
-                waterSetting.smoothness, waterSetting.fresnel));
+            buffer.SetGlobalVector(specularDataId, new Vector2(waterSetting.metallic,
+                waterSetting.roughness));
 
-            buffer.DrawProcedural(
-                Matrix4x4.identity, material, (int)FluidPass.BlendTarget, 
-                MeshTopology.Quads, 6
-            );
-
-            buffer.Blit(null, gBufferDepth, material, (int)FluidPass.WriteDepth);
+            buffer.Blit(null, dest, material, (int)FluidPass.BlendTarget);
 
             buffer.ReleaseTemporaryRT(widthTexId);
             buffer.ReleaseTemporaryRT(normalTexId);
             buffer.ReleaseTemporaryRT(depthTexId);
-            buffer.ReleaseTemporaryRT(cameraDepthId);
-
-            buffer.ReleaseTemporaryRT(tempDepthTexId);
             buffer.ReleaseTemporaryRT(tempNormalTexId);
             buffer.ReleaseTemporaryRT(tempWidthTexId);
 

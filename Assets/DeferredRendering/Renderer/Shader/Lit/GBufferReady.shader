@@ -4,16 +4,13 @@ Shader "Defferer/GBufferReady"
     {
         _MainTex("Texture", 2D) = "white" {}
 		_Color("Color", Color) = (0.5, 0.5, 0.5, 1.0)
-		_ShiftColor("BSDF Shift Color", Color) = (0.5, 0.5, 0.5, 1.0)
-		_Width("BSDF Width", Range(0.1, 1.0)) = 1
 		_Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
 		[Toggle(_CLIPPING)] _Clipping ("Alpha Clipping", Float) = 0
 
 		[Toggle(_MASK_MAP)] _MaskMapToggle ("Mask Map", Float) = 0
 		[NoScaleOffset] _MaskMap("Mask (MODS)", 2D) = "white" {}
 		_Metallic ("Metallic", Range(0, 1)) = 0
-		_Smoothness ("Smoothness", Range(0, 1)) = 0.5
-		_Fresnel ("Fresnel", Range(0, 1)) = 1
+		_Roughness ("Roughness", Range(0, 1)) = 0.5
 
 		[Toggle(_NORMAL_MAP)] _NormalMapToggle ("Normal Map", Float) = 0
 		[NoScaleOffset] _NormalMap("Normals", 2D) = "bump" {}
@@ -26,7 +23,7 @@ Shader "Defferer/GBufferReady"
 		_DetailMap("Details", 2D) = "linearGrey" {}
 		[NoScaleOffset] _DetailNormalMap("Detail Normals", 2D) = "bump" {}
 		_DetailAlbedo("Detail Albedo", Range(0, 1)) = 1
-		_DetailSmoothness("Detail Smoothness", Range(0, 1)) = 1
+		_DetailRoughness("Detail Roughness", Range(0, 1)) = 1
 		_DetailNormalScale("Detail Normal Scale", Range(0, 1)) = 1
 
 		[Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1
@@ -105,6 +102,7 @@ Shader "Defferer/GBufferReady"
 			#pragma multi_compile _ _OTHER_PCF3 _OTHER_PCF5 _OTHER_PCF7
 			#pragma multi_compile _ _CASCADE_BLEND_SOFT _CASCADE_BLEND_DITHER
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
+			#pragma multi_compile _ _USE_CLUSTER
 			#pragma multi_compile_instancing
 			#include "HLSL/TransperantPass.hlsl"
 			ENDHLSL

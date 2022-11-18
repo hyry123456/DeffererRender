@@ -189,49 +189,49 @@ void frag(FragInput i,
     _GBufferNormalTex = float4(normal, 1);
 }
 
-float4 TransferFrag(FragInput i) : SV_Target0
-{
-    Fragment fragment = GetFragment(i.positionCS);
+// float4 TransferFrag(FragInput i) : SV_Target0
+// {
+//     Fragment fragment = GetFragment(i.positionCS);
 
-    float4 map0 = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.bumpUV0); float3 bump0 = DecodeNormal(map0, 1);
-    float4 map1 = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.bumpUV1); float3 bump1 = DecodeNormal(map1, 1);
-    float3 bump = (bump0 + bump1) * 0.5;
-    float3 normal = normalize( BlendNormalRNM(i.normal, bump) );
+//     float4 map0 = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.bumpUV0); float3 bump0 = DecodeNormal(map0, 1);
+//     float4 map1 = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.bumpUV1); float3 bump1 = DecodeNormal(map1, 1);
+//     float3 bump = (bump0 + bump1) * 0.5;
+//     float3 normal = normalize( BlendNormalRNM(i.normal, bump) );
 
-    float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-    float fresnelFac = dot( viewDir, normal );
+//     float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
+//     float fresnelFac = dot( viewDir, normal );
 
-    float3 reflect = ReflectLod(fragment.screenUV, 0);
+//     float3 reflect = ReflectLod(fragment.screenUV, 0);
 
-    float2 offset = normal.xz * _RefrDistort;
-    float3 refrColor_offset = GetBufferColor(fragment, offset).rgb;
-    float3 refrColor = GetBufferColor(fragment).rgb;
-    float3 finalRefrCol;
-    if(GetBufferDepth(fragment, offset) <= fragment.bufferDepth)
-        finalRefrCol = refrColor;
-    else finalRefrCol = refrColor_offset;
-    finalRefrCol *= _RefrColor;
+//     float2 offset = normal.xz * _RefrDistort;
+//     float3 refrColor_offset = GetBufferColor(fragment, offset).rgb;
+//     float3 refrColor = GetBufferColor(fragment).rgb;
+//     float3 finalRefrCol;
+//     if(GetBufferDepth(fragment, offset) <= fragment.bufferDepth)
+//         finalRefrCol = refrColor;
+//     else finalRefrCol = refrColor_offset;
+//     finalRefrCol *= _RefrColor;
 
-    Surface surface = (Surface)0;
-    surface.position = i.worldPos;
-    surface.normal = normal;
-    surface.viewDirection = normalize(_WorldSpaceCameraPos - surface.position);
-    surface.smoothness = _Gloss;
+//     Surface surface = (Surface)0;
+//     surface.position = i.worldPos;
+//     surface.normal = normal;
+//     surface.viewDirection = normalize(_WorldSpaceCameraPos - surface.position);
+//     surface.smoothness = _Gloss;
 
-    DiffuseData diffuse = GetLightingDiffuse(surface, i.positionCS);
+//     DiffuseData diffuse = GetLightingDiffuse(surface, i.positionCS);
 
-    float3 color = diffuse.specularCol * _SpecularColor;
-    // #ifdef _IS_REFR
-        color += lerp(finalRefrCol, reflect, fresnelFac);
-    // #else
-        // float4 water = SAMPLE_TEXTURE2D(_ReflectiveColor, sampler_ReflectiveColor, float2(fresnelFac, fresnelFac)) * _HorizonColor;
-        // color.rgb += lerp(water.rgb, reflect.rgb, water.a);
-    // #endif
+//     float3 color = diffuse.specularCol * _SpecularColor;
+//     // #ifdef _IS_REFR
+//         color += lerp(finalRefrCol, reflect, fresnelFac);
+//     // #else
+//         // float4 water = SAMPLE_TEXTURE2D(_ReflectiveColor, sampler_ReflectiveColor, float2(fresnelFac, fresnelFac)) * _HorizonColor;
+//         // color.rgb += lerp(water.rgb, reflect.rgb, water.a);
+//     // #endif
 
-    // float depthDelta = fragment.bufferDepth - fragment.depth;
-    // color = lerp(_NearColor * color, color, saturate( (depthDelta - _NearDistance) / _NearRange ) );
+//     // float depthDelta = fragment.bufferDepth - fragment.depth;
+//     // color = lerp(_NearColor * color, color, saturate( (depthDelta - _NearDistance) / _NearRange ) );
 
-    return float4(color.rgb, 1);
-}
+//     return float4(color.rgb, 1);
+// }
 
 #endif

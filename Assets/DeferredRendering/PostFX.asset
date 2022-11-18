@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: PostFX
   m_EditorClassIdentifier: 
   postFXShader: {fileID: 4800000, guid: 6c3a07466ffb3c7469bfd1e374913cbb, type: 3}
+  compute: {fileID: 7200000, guid: 9110cb009efbc5c46beea1c47577cfa0, type: 3}
   colorLUTResolution: 32
   ssrSetting:
     useSSR: 1
@@ -20,21 +21,21 @@ MonoBehaviour:
     marchSetpSize: 1
     maxMarchDistance: 500
     depthThickness: 1
-    bilaterFilterFactor: 0.13
+    bilaterFilterFactor: 1
     blurRadius: 2
   bulkLight:
     useBulkLight: 1
-    shrinkRadio: 288
-    circleCount: 100
+    shrinkRadio: 1000
+    circleCount: 16
     scatterRadio: 0.63
     checkDistance: 1000
   bloom:
     maxIterations: 7
-    downscaleLimit: 1
+    downscaleLimit: 5
     bicubicUpsampling: 0
     threshold: 0.8
     thresholdKnee: 1
-    intensity: 0.8
+    intensity: 1
     fadeFireflies: 0
     mode: 0
     scatter: 0.05
@@ -58,7 +59,7 @@ MonoBehaviour:
     contrastThreshold: 0.0665
     relativeThreshold: 0.217
     subpixelBlending: 1
-    lowQuality: 1
+    lowQuality: 0
   stickWater:
     rainAmount: 0.067
     fixedDroplet: 0.089

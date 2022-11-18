@@ -5,6 +5,7 @@
 
 TEXTURE2D(_GBufferDepthTex);
 SAMPLER(sampler_point_clamp);
+// Texture2D<float> _GBufferDepthTex;
 
 float4 _ZBufferParams;
 
@@ -109,6 +110,7 @@ float4x4 _ViewToWorldMat;
 float4x4 _InverseVPMatrix;
 float3 _WorldSpaceCameraPos;
 float _FarDistance;
+uint2 _Pixel_Count;
 
 float3 GetWorldPos(float depth, float2 uv){
     #if defined(UNITY_REVERSED_Z)
@@ -121,29 +123,42 @@ float3 GetWorldPos(float depth, float2 uv){
 	return worldPos.xyz;
 }
 
+inline float LinearEyeDepth( float z )
+{
+	return 1.0 / (_ZBufferParams.z * z + _ZBufferParams.w);
+}
+
 
 [numthreads(1024, 1, 1)]
 void ReadyLight(ComputeShaderInput input)
 {
 	uint clusterIndex1D = input.DispatchThreadID.x;
 
-	if(clusterIndex1D > _CL_CountX * _CL_CountY)
+	if(clusterIndex1D >= _CL_CountX * _CL_CountY)
 		return;
 
 	uint clusterX = input.DispatchThreadID.x / _CL_CountX;
 	uint clusterY = input.DispatchThreadID.x % _CL_CountX;
 
-	float2 uv = float2(clusterX, clusterY) / float2(_CL_CountX, _CL_CountY);
-	float depth = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv, 0);
-	float perNodeLength = _FarDistance / _CL_CountZ;
-	uint count = distance(GetWorldPos(depth, uv), _WorldSpaceCameraPos) / perNodeLength + 1;
+	float2 uv0 = float2(clusterX, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv1 = float2(clusterX + 1.0, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv2 = float2(clusterX, clusterY + 1.0) / float2(_CL_CountX, _CL_CountY);
+	float2 uv3 = float2(clusterX + 1.0, clusterY + 1.0) / float2(_CL_CountX, _CL_CountY);
+	float depth0 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv0, 0);
+	float depth1 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv1, 0);
+	float depth2 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv2, 0);
+	float depth3 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv3, 0);
+	float perNodeLength = _ZBufferParams.x / _ZBufferParams.z / _CL_CountZ;
+	uint count0 = LinearEyeDepth(depth0) / perNodeLength;
+	uint count1 = LinearEyeDepth(depth1) / perNodeLength;
+	uint count2 = LinearEyeDepth(depth2) / perNodeLength;
+	uint count3 = LinearEyeDepth(depth3) / perNodeLength;
+	uint count = max(max(count0, count1), max(count2, count3)) + _CL_CountZ / 8;
 	count = min(_CL_CountZ, count);
 
 	uint i = 0;
 
-	// for(uint i = 0; i < _CL_CountZ; i++){
 	for(i = 0; i < count; i++){
-		clusterIndex1D += _CL_CountX * _CL_CountY;
 		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
 		data.p0 = mul(_ViewToWorldMat, float4(data.p0, 1)).xyz;
 		data.p1 = mul(_ViewToWorldMat, float4(data.p1, 1)).xyz;
@@ -170,39 +185,12 @@ void ReadyLight(ComputeShaderInput input)
 			}
 		}
 		_ClusterCountBuffer[clusterIndex1D] = size;
+		// _ClusterCountBuffer[clusterIndex1D] = count;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
 	}
 	for(i = count; i<_CL_CountZ; i++){
-		clusterIndex1D += _CL_CountX * _CL_CountY;
 		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
 		_ClusterCountBuffer[clusterIndex1D] = 0;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
 	}
-	
-
-	// ClusterData data = _ClusterDataBuffer[clusterIndex1D];
-
-	// data.p0 = mul(_ViewToWorldMat, float4(data.p0, 1)).xyz;
-	// data.p1 = mul(_ViewToWorldMat, float4(data.p1, 1)).xyz;
-	// data.p2 = mul(_ViewToWorldMat, float4(data.p2, 1)).xyz;
-	// data.p3 = mul(_ViewToWorldMat, float4(data.p3, 1)).xyz;
-	// data.p4 = mul(_ViewToWorldMat, float4(data.p4, 1)).xyz;
-	// data.p5 = mul(_ViewToWorldMat, float4(data.p5, 1)).xyz;
-	// data.p6 = mul(_ViewToWorldMat, float4(data.p6, 1)).xyz;
-	// data.p7 = mul(_ViewToWorldMat, float4(data.p7, 1)).xyz;
-
-	// int size = 0;
-	// for (int i = 0; i < _OtherLightCount; i++) {
-	// 	if (CheckPositionInLight(data.p0, i) ||
-	// 		CheckPositionInLight(data.p1, i) ||
-	// 		CheckPositionInLight(data.p2, i) ||
-	// 		CheckPositionInLight(data.p3, i) ||
-	// 		CheckPositionInLight(data.p4, i) ||
-	// 		CheckPositionInLight(data.p5, i) ||
-	// 		CheckPositionInLight(data.p6, i) ||
-	// 		CheckPositionInLight(data.p7, i)
-	// 		)
-	// 	{
-	// 		_ClusterArrayBuffer[clusterIndex1D].lightArray[size++] = i;
-	// 	}
-	// }
-	// _ClusterCountBuffer[clusterIndex1D] = size;
 }

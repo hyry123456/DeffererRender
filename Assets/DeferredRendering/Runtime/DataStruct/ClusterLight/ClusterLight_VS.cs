@@ -10,8 +10,8 @@ namespace DefferedRender
 		public Vector3 p0, p1, p2, p3, p4, p5, p6, p7;
 	}
 
-    /// <summary>/// 视角空间确定灯光裁剪Cluster /// </summary>
     [ExecuteInEditMode]
+    /// <summary>/// 视角空间确定灯光裁剪Cluster /// </summary>
 	public class ClusterLight_VS
 	{
 		private ComputeBuffer clusterBuffer;
@@ -27,7 +27,9 @@ namespace DefferedRender
             get
             {
 				if(instance == null)
+                {
 					instance = new ClusterLight_VS();
+                }
                 return instance;
             }
         }
@@ -42,10 +44,11 @@ namespace DefferedRender
 			viewToWorldMatrixId = Shader.PropertyToID("_ViewToWorldMat");
 
 
-		private ClusterLight_VS() { }
+		Camera preCamera;
 
         public void ComputeLightCluster(CommandBuffer buffer,
-			ClusterLightSetting clusterLight, Camera camera, int depthId)
+			ClusterLightSetting clusterLight, Camera camera, int depthId,
+			int width, int height)
 		{
 			ComputeShader createClusterCS = clusterLight.clusterLightCS;
 			Vector3Int clusterCount = clusterLight.clusterCount;
@@ -58,8 +61,10 @@ namespace DefferedRender
 			buffer.SetGlobalInt(cl_CountZId, clusterCount.z);
 
 			//重新计算灯光裁剪矩阵，这个裁剪矩阵只标识了摄像机的前方，不同于当前的摄像机射线
-			if (clusterBuffer == null || clusterBuffer.count != bufferSize)
+			if (clusterBuffer == null || clusterBuffer.count != bufferSize
+				|| preCamera != camera)
 			{
+				preCamera = camera;
 				//用一个4维矩阵来存储是个方向的值
 				viewFrustumCorners = Matrix4x4.identity;
 				readyKernel = createClusterCS.FindKernel("ReadyLight");
@@ -120,12 +125,12 @@ namespace DefferedRender
 			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterArrayBufferId, clusterArrayBuffer);
 			buffer.SetComputeMatrixParam(createClusterCS, viewToWorldMatrixId, camera.transform.localToWorldMatrix);
 			buffer.SetComputeFloatParam(createClusterCS, "_FarDistance", camera.farClipPlane);
+			buffer.SetComputeIntParams(createClusterCS, "_Pixel_Count", new int[] { width, height });
             buffer.DispatchCompute(createClusterCS, readyKernel, xyCount, 1, 1);
 
             buffer.SetGlobalBuffer(clusterCountBufferId, clusterCountBuffer);
 			buffer.SetGlobalBuffer(clusterArrayBufferId, clusterArrayBuffer);
 
-            //DrawCluster();
         }
 
 
@@ -133,7 +138,7 @@ namespace DefferedRender
 		ClusterData[] clusters;
 		int[] counts;
 
-		public void DrawCluster()
+		public void DrawCluster(int lightCount)
         {
 			if (clusterBuffer == null) return;
 			if(clusters == null || clusters.Length != clusterBuffer.count)
@@ -154,8 +159,10 @@ namespace DefferedRender
 				cluster.p5 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p5);
 				cluster.p6 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p6);
 				cluster.p7 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p7);
-				Color color = counts[i] > 0 ? Color.red : Color.white;
-				Debug.DrawLine(cluster.p0, cluster.p1, color);
+				Color color = Color.white * counts[i] / lightCount;
+				color.a = 1;
+                if (counts[i] == 0) continue;
+                Debug.DrawLine(cluster.p0, cluster.p1, color);
 				Debug.DrawLine(cluster.p1, cluster.p2, color);
 				Debug.DrawLine(cluster.p2, cluster.p3, color);
 				Debug.DrawLine(cluster.p3, cluster.p0, color);

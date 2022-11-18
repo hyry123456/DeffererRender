@@ -51,11 +51,10 @@ Varyings LitPassVertex (Attributes input) {
 
 
 void LitPassFragment (Varyings input,
-        out float4 _GBufferColorTex : SV_Target0,
-        out float4 _GBufferNormalTex : SV_Target1,
-        out float4 _GBufferSpecularTex : SV_Target2,
-        out float4 _GBufferBakeTex : SV_Target3,
-		out float4 _ReflectTargetTex : SV_Target4
+        out float4 _GBufferRT0 : SV_Target0,	//rgb:abledo,w:metalness
+        out float2 _GBufferRT1 : SV_Target1,	//R,G:EncodeNormal
+        out float4 _GBufferRT2 : SV_Target2,	//rgb:emissive,w:roughness
+        out float4 _GBufferRT3 : SV_Target3		//rgb:reflect,w:AO
     ) {
 	UNITY_SETUP_INSTANCE_ID(input);
 	ClipLOD(input.positionCS_SS.xy, unity_LODFade.x);
@@ -76,46 +75,61 @@ void LitPassFragment (Varyings input,
 		normal = normalize(perNormal);
 	#endif
 
-	float width = GetWidth();
-	float4 specularData = float4(GetMetallic(), GetSmoothness(), GetFresnel(), width);		//w赋值为1表示开启PBR
 
 	//烘焙灯光，只处理了烘焙贴图，没有处理阴影烘焙，需要注意
-	float3 bakeColor = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
-	float oneMinusReflectivity = OneMinusReflectivity(specularData.r);
-	float3 diffuse = base.rgb * oneMinusReflectivity;
-	bakeColor = bakeColor * diffuse + GetEmission(input.baseUV.xy);				//通过金属度缩减烘焙光，再加上自发光，之后会在着色时直接加到最后的结果上
-	float4 shiftColor = GetShiftColor();			//分别使用三张图的透明通道写入
+	// float3 bakeColor = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
+	// float oneMinusReflectivity = OneMinusReflectivity(specularData.r);
+	// float3 diffuse = base.rgb * oneMinusReflectivity;
+	// bakeColor = bakeColor * diffuse + GetEmission(input.baseUV.xy);				//通过金属度缩减烘焙光，再加上自发光，之后会在着色时直接加到最后的结果上
+	// float4 shiftColor = GetShiftColor();			//分别使用三张图的透明通道写入
 
-    float3 viewDir = normalize(positionWS - _WorldSpaceCameraPos);
-	float3 reflectDir = reflect(viewDir, normal);
-    float3 orirefDir = reflect(viewDir, perNormal);
+    // float3 viewDir = normalize(positionWS - _WorldSpaceCameraPos);
+	// float3 reflectDir = reflect(viewDir, normal);
 
     float3 noiseNor = GetNoiseNormal(input.noiseUV);
 
-	float3 reflect = ComputeIndirectSpecular(reflectDir, positionWS);
-	#ifdef _USE_SSR
-		float3 reflect1 = ComputeIndirectSpecular(orirefDir, positionWS);	//采集常规反射数据
-		perNormal = normalize(noiseNor + perNormal);						//调整法线
-	#else
-		float3 reflect1 = ComputeIndirectSpecular(orirefDir, positionWS + noiseNor * 5);
-	#endif
+	float2 mainBRDF = float2(GetMetallic(), GetRoughness());
+	float2 waterBRDF = float2(GetWaterMetallic(), GetWaterRoughness());
 
 
-    float3 waterVal = GetWater(input.baseUV.zw);
+
+
+    float4 waterVal = GetWater(input.baseUV.zw);
     float4 waterCol = GetWaterCol();
+	// perNormal = normalize(noiseNor + perNormal);						//调整法线
+	perNormal = lerp(perNormal, normalize(noiseNor + perNormal), waterVal.x);
 
-    float3 buffCol = lerp(base.xyz, waterCol.xyz, waterVal.x);
-    float3 buffNor = lerp(normal, perNormal, waterVal.x) * 0.5 + 0.5;
-    float4 buffSpe = lerp(specularData, float4(1, 1, 0.3, 0), waterVal.x);
-    // float4 buffSpe = float4(1, 1, 0.3, 1);
+    float3 buffCol = lerp(base.xyz, waterCol.xyz * base.xyz, waterVal.x);
+	float3 buffNor = lerp(normal, perNormal, waterVal.x);
+	float2 buffNorOct = PackNormalOct(buffNor);
+	float2 buffBRDF = lerp(mainBRDF, waterBRDF, waterVal.x);
+
+	float3 viewDir = normalize(positionWS - _WorldSpaceCameraPos);
+	float3 reflectDir = reflect(viewDir, normal);		
+    float3 orirefDir = reflect(viewDir, perNormal);
+	float mip_Level = mainBRDF.x * (1.7 - 0.7 * mainBRDF.x);
+	float mip_Level_Water = waterBRDF.x * (1.7 - 0.7 * waterBRDF.x);
+
+	float3 reflect = ComputeIndirectSpecular(reflectDir, positionWS, mip_Level);
+	float3 reflect1 = ComputeIndirectSpecular(buffNor, positionWS + noiseNor * 5, mip_Level_Water);
+
     float3 buffRef = lerp(reflect, reflect1, waterVal.x);
-    float3 bakeCol = lerp(bakeColor, 0, waterVal.x);
 
-	_GBufferColorTex = float4(buffCol, shiftColor.x);
-	_GBufferNormalTex = float4(buffNor, shiftColor.y);
-	_GBufferSpecularTex = buffSpe;
-	_ReflectTargetTex = float4(buffRef, 1);
-	_GBufferBakeTex = float4(bakeCol, shiftColor.z);
+	float3 emissive = GetEmission(input.baseUV.xy);
+	// float ao = GetOcclusion();
+	float ao = 1;
+	float3 sh = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal) * ao;
+	half oneMinusReflectivity = (1 - buffBRDF.r) * 0.96;
+	half3 diffColor = base.rgb * oneMinusReflectivity;
+	sh *= diffColor;
+	emissive += sh;		//计算过OA的间接光数据，之后直接加上去就行了
+	emissive = lerp(emissive, 0, waterVal.x);
+
+	_GBufferRT0 = float4(buffCol, buffBRDF.x);
+	_GBufferRT1 = buffNorOct;
+	_GBufferRT2 = float4(emissive, buffBRDF.y);
+	_GBufferRT3 = float4(buffRef, ao);
 }
+
 
 #endif

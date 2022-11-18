@@ -35,15 +35,18 @@ float4 MetaPassFragment (Varyings input) : SV_TARGET {
 
 	InputConfig config = GetInputConfig(input.baseUV);
 	float4 base = GetBase(config);
-	Surface surface = (Surface)0;
-	surface.color = base.rgb;
-	surface.metallic = GetMetallic(config);
-	surface.smoothness = GetSmoothness(config);
-	BRDF brdf = GetBRDF(surface);
+	float3 color = base.rgb;
+	float metallic = GetMetallic(config);
+	// surface.smoothness = GetSmoothness(config);
+	float roughness = GetRoughness(config);
+	float3 specColor = lerp(0.04, color, metallic);
+	// BRDF brdf = GetBRDF(surface);
 	float4 meta = 0.0;
 	if (unity_MetaFragmentControl.x) {
-		meta = float4(brdf.diffuse, 1.0);
-		meta.rgb += brdf.specular * brdf.roughness * 0.5;
+		float oneMinusReflective = OneMinusReflectivity(metallic);
+		float3 diffuse = oneMinusReflective * color;
+		meta = float4(diffuse, 1.0);
+		meta.rgb += specColor * roughness * 0.5;
 		meta.rgb = min(
 			PositivePow(meta.rgb, unity_OneOverOutputBoost), unity_MaxOutputValue
 		);

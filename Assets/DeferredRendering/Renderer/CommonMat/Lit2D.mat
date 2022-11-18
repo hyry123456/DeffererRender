@@ -75,6 +75,7 @@ Material:
     - _DetailMapToggle: 0
     - _DetailNormalMapScale: 1
     - _DetailNormalScale: 1
+    - _DetailRoughness: 1
     - _DetailSmoothness: 1
     - _DstBlend: 0
     - _Fresnel: 1
@@ -88,6 +89,7 @@ Material:
     - _NormalScale: 1
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _Roughness: 0
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1

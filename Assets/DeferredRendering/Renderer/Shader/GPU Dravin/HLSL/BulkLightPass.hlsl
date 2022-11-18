@@ -210,12 +210,12 @@ bool CheckOutBox(int mode, float maxV, float minV, float value){
 float3 GetBulkLight(float4 worldPos, float2 screenUV, float4 lightIndex, float3 boxMax, float3 boxMin, float3 direction){
 
 
-    float perNodeLength = worldPos.w / _BulkSampleCount / 2;
+    float perNodeLength = worldPos.w / _BulkSampleCount;
     float3 currentPoint = worldPos.xyz;
     float3 viewDirection = -direction;
 
     float3 color = 0;
-    float seed = random((screenUV.y + screenUV.x) * _ScreenParams.x * _ScreenParams.y + 0.2312312);
+    float seed = random((screenUV.y + screenUV.x) * _ScreenParams.x * _ScreenParams.y + 0.2312312) * 0.5 + 0.5;
 
     int3 mode3;
     mode3.x = (direction.x > 0)? 1 : 0;     //1为判断x的大

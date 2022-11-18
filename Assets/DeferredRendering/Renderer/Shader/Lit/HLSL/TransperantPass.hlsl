@@ -78,28 +78,30 @@ float4 LitPassFragment (Varyings input) : SV_TARGET {
 		surface.normal = NormalTangentToWorld(
 			GetNormalTS(config), input.normalWS, input.tangentWS
 		);
-		surface.interpolatedNormal = input.normalWS;
 	#else
 		surface.normal = normalize(input.normalWS);
-		surface.interpolatedNormal = surface.normal;
 	#endif
+
+
 	surface.viewDirection = normalize(_WorldSpaceCameraPos - input.positionWS);
 	surface.depth = -TransformWorldToView(input.positionWS).z;
 	surface.color = base.rgb;
 	surface.alpha = base.a;
 	surface.metallic = GetMetallic(config);
-	// surface.occlusion = GetOcclusion(config);
-	surface.smoothness = GetSmoothness(config);
-	surface.fresnelStrength = GetFresnel(config);
+	surface.roughness = GetRoughness(config);
+	surface.ambientOcclusion = GetOcclusion(config);
 	surface.dither = InterleavedGradientNoise(input.positionCS_SS.xy, 0);
 	
-	#if defined(_PREMULTIPLY_ALPHA)
-		BRDF brdf = GetBRDF(surface, true);
-	#else
-		BRDF brdf = GetBRDF(surface);
-	#endif
+	float3 color = GetGBufferLight(surface, input.positionCS_SS);
 
-	float3 color = GetGBufferLight(surface, brdf, input.positionCS_SS);
+	float3 viewDir = normalize(_WorldSpaceCameraPos - input.positionWS);
+	float3 reflect_dir = reflect(-surface.viewDirection, surface.normal);		
+	float mip_Level = surface.metallic * (1.7 - 0.7 * surface.metallic);
+	float3 refl = ComputeIndirectSpecular(reflect_dir, input.positionWS, mip_Level);
+
+	color.xyz += refl * surface.color;
+	color.xyz *= surface.ambientOcclusion;
+
 	color += GetEmission(config);
 	return float4(color, 1);
 }

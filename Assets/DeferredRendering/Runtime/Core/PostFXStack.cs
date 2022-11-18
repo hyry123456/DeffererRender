@@ -22,7 +22,7 @@ namespace DefferedRender
 			ColorGradingNeutral,
 			ColorGradingReinhard,
 			Final,
-			SSS,
+			//SSS,
 			GBufferFinal,
 			BulkLight,
 			BilateralFilter,
@@ -133,11 +133,11 @@ namespace DefferedRender
 			this.width = width;
 			this.height = height;
 
-			if(settings.ssr.useSSR && camera.cameraType == CameraType.Game)
-				buffer.EnableShaderKeyword("_USE_SSR");
-			else
-				buffer.DisableShaderKeyword("_USE_SSR");
-
+			////水面渲染时需要用到的数据，判断反射数据的采集模式
+			//if (settings.UseSSR())
+			//	buffer.EnableShaderKeyword("_USE_SSR");
+			//else
+			//	buffer.DisableShaderKeyword("_USE_SSR");
 		}
 
 		/// <summary>
@@ -173,41 +173,115 @@ namespace DefferedRender
 			buffer.Clear();
 		}
 
+		bool useSSR;
 
-		/// <summary>
-		/// 准备SSS贴图，如果没有开启SSS就是仅有一张全黑图
-		/// </summary>
+		/// <summary>/// 准备SSR反射的目标贴图/// </summary>
 		/// <param name="preFrameRenderFinal">上一帧渲染出来的纹理</param>
 		/// <param name="reflectTex">采集到的反射贴图</param>
-		public void DrawSSS(RenderTexture preFrameRenderFinal, int reflectTex)
+		public void DrawSSS(RenderTexture preFrameRenderFinal, int[] gBuffers)
         {
-			buffer.GetTemporaryRT(sssTargetTex, this.width, this.height,
-				0, FilterMode.Bilinear, useHDR ?
-					RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default);
-
-			//把静态反射保存起来
-			Draw(reflectTex, sssTargetTex, Pass.Copy);
-			if (settings.ssr.useSSR && camera.cameraType == CameraType.Game)
+            if (settings.UseSSR() && preFrameRenderFinal != null
+				&& camera.cameraType == CameraType.Game)
             {
+				if(preFrameRenderFinal.width != width
+					|| preFrameRenderFinal.height != height)
+                {
+					useSSR = false;
+					return;
+                }
+
+				buffer.GetTemporaryRT(sssTargetTex, width, height, 0, FilterMode.Bilinear,
+					RenderTextureFormat.DefaultHDR, RenderTextureReadWrite.Linear, 1, true);
+
 				SSR ssr = settings.ssr;
-				buffer.SetGlobalInt(maxRayMarchingStepId, ssr.rayMarchingSetp);
-				buffer.SetGlobalFloat(rayMarchingStepSizeId, ssr.marchSetpSize);
-				buffer.SetGlobalFloat(maxRayMarchingDistance, ssr.maxMarchDistance);
-				buffer.SetGlobalFloat(depthThicknessId, ssr.depthThickness);
-				//绘制实时反射
-				Draw(preFrameRenderFinal, sssTargetTex, Pass.SSS);
+
+				buffer.SetComputeIntParam(settings.ComputeShader, maxRayMarchingStepId, ssr.rayMarchingSetp);
+				buffer.SetComputeFloatParam(settings.ComputeShader, rayMarchingStepSizeId, ssr.marchSetpSize);
+				buffer.SetComputeFloatParam(settings.ComputeShader, maxRayMarchingDistance, ssr.maxMarchDistance);
+				buffer.SetComputeFloatParam(settings.ComputeShader, depthThicknessId, ssr.depthThickness);
+
+				buffer.SetComputeIntParams(settings.ComputeShader, "_PixelCount",
+					new int[] { width, height });
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel, "Result", sssTargetTex);
+				//设置GBuffer
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel, "_GBufferRT1", gBuffers[1]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel, "_GBufferRT2", gBuffers[2]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel, "_GBufferRT3", gBuffers[3]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel, "_OriginTex", preFrameRenderFinal);
+				buffer.DispatchCompute(settings.ComputeShader, settings.SSR_Kernel,
+					width / 32 + 1, height / 32 + 1, 1);
+				useSSR = true;
+
+
+				buffer.GetTemporaryRT(bulkLightTempTexId, width, height,
+					0, FilterMode.Bilinear, RenderTextureFormat.DefaultHDR, 
+					RenderTextureReadWrite.Linear, 1, true);
+
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 1, "Result", bulkLightTempTexId);
+				//设置GBuffer
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 1, "_GBufferRT1", gBuffers[1]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 1, "_GBufferRT2", gBuffers[2]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 1, "_GBufferRT3", gBuffers[3]);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 1, "_OriginTex", sssTargetTex);
+
+				buffer.SetComputeFloatParam(settings.ComputeShader, 
+					"_BilaterFilterFactor", ssr.bilaterFilterFactor);
+				buffer.SetComputeIntParam(settings.ComputeShader,
+					"_BlurRadius", settings.ssr.blurRadius);
+				buffer.DispatchCompute(settings.ComputeShader, settings.SSR_Kernel + 1,
+					width / 32 + 1, height / 32 + 1, 1);
+
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 2, "Result", sssTargetTex);
+				buffer.SetComputeTextureParam(settings.ComputeShader,
+					settings.SSR_Kernel + 2, "_OriginTex", bulkLightTempTexId);
+				buffer.DispatchCompute(settings.ComputeShader, settings.SSR_Kernel + 2,
+					width / 32 + 1, height / 32 + 1, 1);
+				buffer.ReleaseTemporaryRT(bulkLightTempTexId);
+			}
+            else
+            {
+				useSSR = false;
             }
+			//buffer.GetTemporaryRT(sssTargetTex, this.width, this.height,
+			//	0, FilterMode.Bilinear, useHDR ?
+			//		RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default);
 
-			buffer.GetTemporaryRT(bulkLightTempTexId, this.width, this.height,
-				0, FilterMode.Bilinear, useHDR ?
-					RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default);
+			////把静态反射保存起来
+			//Draw(reflectTex, sssTargetTex, Pass.Copy);
+			//if (settings.ssr.useSSR && camera.cameraType == CameraType.Game)
+   //         {
+			//	SSR ssr = settings.ssr;
+			//	buffer.SetGlobalInt(maxRayMarchingStepId, ssr.rayMarchingSetp);
+			//	buffer.SetGlobalFloat(rayMarchingStepSizeId, ssr.marchSetpSize);
+			//	buffer.SetGlobalFloat(maxRayMarchingDistance, ssr.maxMarchDistance);
+			//	buffer.SetGlobalFloat(depthThicknessId, ssr.depthThickness);
+			//	//绘制实时反射
+			//	Draw(preFrameRenderFinal, sssTargetTex, Pass.SSS);
+   //         }
 
-			buffer.SetGlobalFloat("_BilaterFilterFactor", settings.ssr.bilaterFilterFactor);
-			buffer.SetGlobalVector("_BlurRadius", new Vector4(settings.ssr.blurRadius, 0));
-			Draw(sssTargetTex, bulkLightTempTexId, Pass.BilateralFilter);
-			buffer.SetGlobalVector("_BlurRadius", new Vector4(0, settings.ssr.blurRadius));
-			Draw(bulkLightTempTexId, sssTargetTex, Pass.BilateralFilter);
-			buffer.ReleaseTemporaryRT(bulkLightTempTexId);
+			//buffer.GetTemporaryRT(bulkLightTempTexId, this.width, this.height,
+			//	0, FilterMode.Bilinear, useHDR ?
+			//		RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default);
+
+			//buffer.SetGlobalFloat("_BilaterFilterFactor", settings.ssr.bilaterFilterFactor);
+			//buffer.SetGlobalVector("_BlurRadius", new Vector4(settings.ssr.blurRadius, 0));
+			//Draw(sssTargetTex, bulkLightTempTexId, Pass.BilateralFilter);
+			//buffer.SetGlobalVector("_BlurRadius", new Vector4(0, settings.ssr.blurRadius));
+			//Draw(bulkLightTempTexId, sssTargetTex, Pass.BilateralFilter);
+			//buffer.ReleaseTemporaryRT(bulkLightTempTexId);
+
+
 			//进行模糊处理
 			//buffer.GetTemporaryRT(bulkLightTempTexId, this.width, this.height,
 			//0, FilterMode.Bilinear, useHDR ?
@@ -221,8 +295,14 @@ namespace DefferedRender
 		/// <summary>
 		/// 绘制最终纹理，也就是根据SSS和GBuffer数据渲染出来的纹理
 		/// </summary>
-		public void DrawGBufferFinal(int targetTexId)
+		public void DrawGBufferFinal(int targetTexId, int gBufferRefl)
 		{
+			if (!useSSR)
+			{
+				buffer.SetGlobalTexture(sssTargetTex, gBufferRefl);
+				//buffer.SetGlobalTexture(sssTargetTex, sssTargetTex);
+			}
+			//else
             Draw(0, targetTexId, Pass.GBufferFinal);
 			buffer.ReleaseTemporaryRT(sssTargetTex);
 			ExecuteBuffer();

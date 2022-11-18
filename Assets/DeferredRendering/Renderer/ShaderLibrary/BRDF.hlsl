@@ -1,68 +1,77 @@
 ﻿#ifndef CUSTOM_BRDF_INCLUDED
 #define CUSTOM_BRDF_INCLUDED
 
-struct BRDF {
-	float3 diffuse;
-	float3 specular;
-	float roughness;
-	// float perceptualRoughness;
-	float fresnel;
-};
+// struct BRDF {
+// 	float3 diffuse;
+// 	float3 specular;
+// 	float roughness;
+// 	// float fresnel;
+// };
 
 #define MIN_REFLECTIVITY 0.04
+
+// #define INV_PI 1 / 3.14159265359
 
 float OneMinusReflectivity (float metallic) {
 	float range = 1.0 - MIN_REFLECTIVITY;
 	return range - metallic * range;
 }
 
-BRDF GetBRDF (Surface surface) {
-	BRDF brdf;
-	float oneMinusReflectivity = OneMinusReflectivity(surface.metallic);
-	brdf.diffuse = surface.color * oneMinusReflectivity;
-	brdf.specular = lerp(MIN_REFLECTIVITY, surface.color, surface.metallic);
-	float roughness = PerceptualSmoothnessToPerceptualRoughness(surface.smoothness);
-	brdf.roughness = PerceptualRoughnessToRoughness(roughness);
-	brdf.fresnel = saturate(surface.smoothness + 1.0 - oneMinusReflectivity);
-	return brdf;
+//计算Smith-Joint阴影遮掩函数，返回的是除以镜面反射项分母的可见性项V
+inline half ComputeSmithJointGGXVisibilityTerm(half nl, half nv, half roughness)
+{
+	half ag = roughness * roughness;
+	half lambdaV = nl * (nv * (1 - ag) + ag);
+	half lambdaL = nv * (nl * (1 - ag) + ag);
+
+	return 0.5f / (lambdaV + lambdaL + 1e-5f);
+}
+//计算法线分布函数
+inline half ComputeGGXTerm(half nh, half roughness)
+{
+	half a = roughness * roughness;
+	half a2 = a * a;
+	half d = (a2 - 1.0f) * nh * nh + 1.0f;
+	return a2 * INV_PI / (d * d + 1e-5f);
+}
+//计算菲涅尔
+inline half3 ComputeFresnelTerm(half3 F0, half cosA)
+{
+	return F0 + (1 - F0) * pow(1 - cosA, 5);
 }
 
-BRDF GetBRDF(float3 albedo, float metallic, float smoothess) {
-	BRDF brdf;
-	float oneMinusReflectivity = OneMinusReflectivity(metallic);
-	brdf.diffuse = albedo * oneMinusReflectivity;
-	brdf.specular = lerp(MIN_REFLECTIVITY, albedo, metallic);
-	float roughness = PerceptualSmoothnessToPerceptualRoughness(smoothess);
-	brdf.roughness = PerceptualRoughnessToRoughness(roughness);
-	brdf.fresnel = saturate(smoothess + 1.0 - oneMinusReflectivity);
-	return brdf;
-}
 
-float SpecularStrength (Surface surface, BRDF brdf, Light light) {
-	float3 h = SafeNormalize(light.direction + surface.viewDirection);
-	float nh2 = Square(saturate(dot(surface.normal, h)));
-	float lh2 = Square(saturate(dot(light.direction, h)));
-	float r2 = Square(brdf.roughness);
-	float d2 = Square(nh2 * (r2 - 1.0) + 1.00001);
-	float normalization = brdf.roughness * 4.0 + 2.0;
-	return r2 / (d2 * max(0.1, lh2) * normalization);
-}
 
-float3 DirectBRDF (Surface surface, BRDF brdf, Light light) {
-	return SpecularStrength(surface, brdf, light) * brdf.specular + brdf.diffuse;
-}
+float3 DirectBRDF (Surface surface, Light light) {
+	float3 baseCol = surface.color  * light.color;	
+	float3 diff = baseCol  * (1- surface.metallic) / 3.14159265359;
 
-//采集计算经过BRDF调整后的反射光
-float3 ReflectBRDF (
-	float3 normal, float3 viewDir, float fresnel, BRDF brdf, float3 specular
-) {
-	float fresnelStrength = fresnel *
-		Pow4(1.0 - saturate(dot(normal, viewDir)));
+	float3 lightDir = light.direction, viewDir = surface.viewDirection, normal = surface.normal;
 
-	float3 reflection =
-		specular * lerp(brdf.specular, brdf.fresnel, fresnelStrength);
-	reflection /= brdf.roughness * brdf.roughness + 1.0;
-    return reflection;
+	//计算BRDF需要用到一些项
+	// 高光数据
+	half3 halfDir = normalize(lightDir + viewDir);
+	//视线方向与法线方向的余弦值
+	half nv = saturate(dot(normal,viewDir));
+	//法线方向与灯光方向的余弦值
+	half nl = saturate(dot(normal,lightDir));
+	//高光数据与世界法线的余弦值
+	half nh = saturate(dot(normal,halfDir));
+	//灯光方向与视线方向的余弦值
+	half lv = saturate(dot(lightDir,viewDir));
+	//灯光方向与高光方向的余弦值
+	half lh = saturate(dot(lightDir,halfDir));
+
+	//计算镜面反射率,unity_ColorSpaceDielectricSpec是一个固定值，rgb都大概在65的位置，不太确定有什么用
+	//菲涅尔效应的F0值，也就是菲涅尔效应的最低值的计算
+	half3 specColor = lerp(0.4, baseCol, surface.metallic);
+
+	half V = ComputeSmithJointGGXVisibilityTerm(nl, nv, surface.roughness);//计算BRDF高光反射项，可见性V  这里把分母已经除了
+	half D = ComputeGGXTerm(nh, surface.roughness);//计算BRDF高光反射项,法线分布函数D
+	half3 F = ComputeFresnelTerm(specColor,lh);//计算BRDF高光反射项，菲涅尔项F
+	half3 specularTerm = V * D * F;//计算镜面反射项	
+
+	return (specularTerm + diff) * nl * light.attenuation;
 }
 
 #endif

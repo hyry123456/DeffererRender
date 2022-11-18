@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f8960b6962deab489b3c69962a35c23, type: 3}
   m_Name: Fluid Draw
   m_EditorClassIdentifier: 
-  releaseTime: 0.1
+  releaseTime: 0.01
   sustainTime: 10
   groupShapeMode: 0
   particleShadpeMode: 1
@@ -20,58 +20,48 @@ MonoBehaviour:
   particleSpeedMode: 4
   sizeBySpeedMode: 0
   speedRange: {x: 0, y: 1}
-  sizeRange: {x: 0.3, y: 0.3}
+  sizeRange: {x: 0.5, y: 0.5}
   groupUseGravity: 1
   particleUseGravity: 1
   groupArc: 6.28
   particleArc: 6.28
-  groupRadius: 0.67
+  groupRadius: 1
   particleRadius: 0.1
   groupCubeRange: {x: 1, y: 1, z: 1}
   particleCubeRange: {x: 1, y: 1, z: 1}
-  groupVelocityBegin: {x: 0, y: -1, z: 8}
+  groupVelocityBegin: {x: 0, y: 0, z: 0}
   particleVelocityBegin: 6
   octave: 8
   frequency: 1
-  particleIntensity: 0.1
+  particleIntensity: 2
   collsionScale: 0.137
   obstruction: 0
-  circleBlur: 6
-  cullOff: 0
-  bilaterFilterFactor: 0
-  blurRadius: 0.98
-  waterCol: {r: 0, g: 1.4117647, b: 2, a: 1}
-  maxFluidWidth: 1
+  circleBlur: 1
+  cullOff: 0.014
+  bilaterFilterFactor: 0.755
+  blurRadius: 2
+  waterCol: {r: 0, g: 11.3089, b: 15.999998, a: 1}
+  maxFluidWidth: 2
   metallic: 0
-  smoothness: 0.525
-  fresnel: 0
+  roughness: 0.1
   particleSize:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0
-      inSlope: 2
-      outSlope: 2
-      tangentMode: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 34
       weightedMode: 0
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.91505843
-      value: 0.99278486
-      inSlope: 0.16988325
-      outSlope: 0.16988325
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 1.0534668
-      value: -0.121154785
+      time: 1
+      value: 1
       inSlope: 0
       outSlope: 0
-      tangentMode: 0
+      tangentMode: 34
       weightedMode: 0
       inWeight: 0
       outWeight: 0

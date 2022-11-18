@@ -53,50 +53,50 @@ void LitPassFragment (Varyings_TREE input,
         out float4 _GBufferSpecularTex : SV_Target2,
         out float4 _GBufferBakeTex : SV_Target3
     ) {
-	UNITY_SETUP_INSTANCE_ID(input);
-	InputConfig config = GetInputConfig(input.baseUV);
-	ClipLOD(input.positionCS_SS.xy, unity_LODFade.x);
+	// UNITY_SETUP_INSTANCE_ID(input);
+	// InputConfig config = GetInputConfig(input.baseUV);
+	// ClipLOD(input.positionCS_SS.xy, unity_LODFade.x);
 	
-	#if defined(_MASK_MAP)
-		config.useMask = true;
-	#endif
-	#if defined(_DETAIL_MAP)
-		config.detailUV = input.detailUV;
-		config.useDetail = true;
-	#endif
+	// #if defined(_MASK_MAP)
+	// 	config.useMask = true;
+	// #endif
+	// #if defined(_DETAIL_MAP)
+	// 	config.detailUV = input.detailUV;
+	// 	config.useDetail = true;
+	// #endif
 	
-	//纹理颜色
-	float4 base = GetBase(config);
-	float3 positionWS = input.positionWS;
-	#if defined(_CLIPPING)
-		clip(base.a - GetCutoff(config));
-	#endif
+	// //纹理颜色
+	// float4 base = GetBase(config);
+	// float3 positionWS = input.positionWS;
+	// #if defined(_CLIPPING)
+	// 	clip(base.a - GetCutoff(config));
+	// #endif
 	
-	float3 normal;
-	float3 perNormal = input.normalWS;
-	#if defined(_NORMAL_MAP)
-		normal = NormalTangentToWorld(
-			GetNormalTS(config), input.normalWS, input.tangentWS
-		);
-	#else
-		normal = normalize(input.normalWS);
-	#endif
+	// float3 normal;
+	// float3 perNormal = input.normalWS;
+	// #if defined(_NORMAL_MAP)
+	// 	normal = NormalTangentToWorld(
+	// 		GetNormalTS(config), input.normalWS, input.tangentWS
+	// 	);
+	// #else
+	// 	normal = normalize(input.normalWS);
+	// #endif
 
-	float width = GetWidth(config);
-	float4 specularData = float4(GetMetallic(config), GetSmoothness(config), GetFresnel(config), width);		//w赋值为1表示开启PBR
+	// float width = GetWidth(config);
+	// float4 specularData = float4(GetMetallic(config), GetSmoothness(config), GetFresnel(config), width);		//w赋值为1表示开启PBR
 
-	//烘焙灯光，只处理了烘焙贴图，没有处理阴影烘焙，需要注意
-	// float3 bakeColor = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
-	float oneMinusReflectivity = OneMinusReflectivity(specularData.r);
-	float3 diffuse = base.rgb * oneMinusReflectivity;
-	// bakeColor = bakeColor * diffuse + GetEmission(config);				//通过金属度缩减烘焙光，再加上自发光，之后会在着色时直接加到最后的结果上
-	float4 shiftColor = GetShiftColor(config);			//分别使用三张图的透明通道写入
+	// //烘焙灯光，只处理了烘焙贴图，没有处理阴影烘焙，需要注意
+	// // float3 bakeColor = GetBakeDate(GI_FRAGMENT_DATA(input), positionWS, perNormal);
+	// float oneMinusReflectivity = OneMinusReflectivity(specularData.r);
+	// float3 diffuse = base.rgb * oneMinusReflectivity;
+	// // bakeColor = bakeColor * diffuse + GetEmission(config);				//通过金属度缩减烘焙光，再加上自发光，之后会在着色时直接加到最后的结果上
+	// float4 shiftColor = GetShiftColor(config);			//分别使用三张图的透明通道写入
 
-	_GBufferColorTex = float4(base.xyz, shiftColor.x);
-	_GBufferNormalTex = float4(normal * 0.5 + 0.5, shiftColor.y);
-	_GBufferSpecularTex = specularData;
+	// _GBufferColorTex = float4(base.xyz, shiftColor.x);
+	// _GBufferNormalTex = float4(normal * 0.5 + 0.5, shiftColor.y);
+	// _GBufferSpecularTex = specularData;
 
-	_GBufferBakeTex = float4(GetEmission(config), shiftColor.z);
+	// _GBufferBakeTex = float4(GetEmission(config), shiftColor.z);
 }
 
 

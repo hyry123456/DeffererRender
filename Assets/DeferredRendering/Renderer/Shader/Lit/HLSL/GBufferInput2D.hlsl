@@ -22,7 +22,7 @@ UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Smoothness)
 	UNITY_DEFINE_INSTANCED_PROP(float, _Fresnel)
 	UNITY_DEFINE_INSTANCED_PROP(float, _DetailAlbedo)
-	UNITY_DEFINE_INSTANCED_PROP(float, _DetailSmoothness)
+	UNITY_DEFINE_INSTANCED_PROP(float, _DetailRoughness)
 	UNITY_DEFINE_INSTANCED_PROP(float, _DetailNormalScale)
 	UNITY_DEFINE_INSTANCED_PROP(float, _NormalScale)
 
@@ -122,7 +122,7 @@ float GetSmoothness (InputConfig c) {
 	smoothness *= GetMask(c).a;
 
 	if (c.useDetail) {
-		float detail = GetDetail(c).b * INPUT_PROP(_DetailSmoothness);
+		float detail = GetDetail(c).b * INPUT_PROP(_DetailRoughness);
 		float mask = GetMask(c).b;
 		smoothness =
 			lerp(smoothness, detail < 0.0 ? 0.0 : 1.0, abs(detail) * mask);

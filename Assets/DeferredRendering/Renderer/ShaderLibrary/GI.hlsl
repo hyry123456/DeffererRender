@@ -13,12 +13,12 @@ SAMPLER(samplerunity_ShadowMask);
 TEXTURE3D_FLOAT(unity_ProbeVolumeSH);
 SAMPLER(samplerunity_ProbeVolumeSH);
 
-TEXTURE2D(_SSSTargetTex);
-SAMPLER(sampler_SSSTargetTex);
+// TEXTURE2D(_SSSTargetTex);
+// SAMPLER(sampler_SSSTargetTex);
 // TEXTURE2D(_SSSPyramid1);
 // TEXTURE2D(_SSSPyramid2);
 // TEXTURE2D(_SSSPyramid3);
-float4 _SSSTargetTex_TexelSize;
+// float4 _SSSTargetTex_TexelSize;
 
 TEXTURECUBE(unity_SpecCube0);
 SAMPLER(samplerunity_SpecCube0);
@@ -86,29 +86,29 @@ inline half3 BoxProjectedDirection(half3 worldRefDir, float3 worldPos, float4 cu
 	return worldRefDir;
 }
 
-inline half3 SamplerReflectProbe0(half3 refDir)
+inline half3 SamplerReflectProbe0(half3 refDir, float mip_Level)
 {
 	float4 environment = SAMPLE_TEXTURECUBE_LOD(
-		unity_SpecCube0, samplerunity_SpecCube0, refDir, 0
+		unity_SpecCube0, samplerunity_SpecCube0, refDir, mip_Level
 	);
 	return DecodeHDREnvironment(environment, unity_SpecCube0_HDR);
 }
 
-inline half3 SamplerReflectProbe1(half3 refDir)
+inline half3 SamplerReflectProbe1(half3 refDir, float mip_Level)
 {
 	float4 environment = SAMPLE_TEXTURECUBE_LOD(
-		unity_SpecCube1, samplerunity_SpecCube1, refDir, 0
+		unity_SpecCube1, samplerunity_SpecCube1, refDir, mip_Level
 	);
 	return DecodeHDREnvironment(environment, unity_SpecCube1_HDR);
 }
 
 
 //计算间接光镜面反射
-inline half3 ComputeIndirectSpecular(half3 refDir, float3 worldPos)
+inline half3 ComputeIndirectSpecular(half3 refDir, float3 worldPos, float mip_Level)
 {
 	half3 specular = 0;
 	half3 refDir1 = BoxProjectedDirection(refDir, worldPos, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-	half3 ref1 = SamplerReflectProbe0(refDir1);
+	half3 ref1 = SamplerReflectProbe0(refDir1, mip_Level);
 	// half3 ref1 = SamplerReflectProbe(unity_SpecCube0, refDir);
 	// return ref1;
 
@@ -118,7 +118,7 @@ inline half3 ComputeIndirectSpecular(half3 refDir, float3 worldPos)
 		//重新映射第二个反射探头的方向
 		half3 refDir2 = BoxProjectedDirection(refDir, worldPos, unity_SpecCube1_ProbePosition, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
 
-		half3 ref2 = SamplerReflectProbe1(refDir2);
+		half3 ref2 = SamplerReflectProbe1(refDir2, mip_Level);
 
 		//进行混合
 		specular = lerp(ref2, ref1, unity_SpecCube0_BoxMin.w);
@@ -162,24 +162,26 @@ float3 SampleLightProbe (float3 positionWS, float3 normalWS) {
 
 float3 GetBakeDate(float2 lightMapUV, float3 positionWS, float3 normalWS){
 	return SampleLightMap(lightMapUV) + SampleLightProbe(positionWS, normalWS);
+	// return SampleLightMap(lightMapUV);
+	// return SampleLightProbe(positionWS, normalWS);
 }
 
-float4 GetReflect(float2 screenUV){
-	return SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV);
-}
+// float4 GetReflect(float2 screenUV){
+// 	return SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV);
+// }
 
-float3 ReflectLod(float2 screenUV, float roughness)
-{
-	float i = _SSSTargetTex_TexelSize.x * roughness * 2;
-	float j = _SSSTargetTex_TexelSize.y * roughness * 2;
-	float3 color = 0;
-	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV).xyz;
-	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(i, j)).xyz;
-	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(-i, j)).xyz;
-	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(i, -j)).xyz;
-	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(-i, -j)).xyz;
+// float3 ReflectLod(float2 screenUV, float roughness)
+// {
+// 	float i = _SSSTargetTex_TexelSize.x * roughness * 2;
+// 	float j = _SSSTargetTex_TexelSize.y * roughness * 2;
+// 	float3 color = 0;
+// 	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV).xyz;
+// 	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(i, j)).xyz;
+// 	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(-i, j)).xyz;
+// 	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(i, -j)).xyz;
+// 	color += SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_SSSTargetTex, screenUV + float2(-i, -j)).xyz;
 
-	return color / 5.0;
-}
+// 	return color / 5.0;
+// }
 
 #endif

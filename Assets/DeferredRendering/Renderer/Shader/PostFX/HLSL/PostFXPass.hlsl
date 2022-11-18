@@ -66,46 +66,6 @@ Varyings BlitPassRayVertex(Attributes input){
 }
 
 
-Varyings SSRPassVertex(Attributes input){
-    Varyings output = (Varyings)0;
-    output.positionCS_SS = TransformObjectToHClip(input.positionOS);
-    output.screenUV = input.baseUV;
-
-    float4 clipPos = float4(input.baseUV * 2 - 1.0, 1.0, 1.0);
-    float4 viewRay = mul(_InverseProjectionMatrix, clipPos);
-    output.viewRay = viewRay.xyz / viewRay.w;
-    return output;
-}
-
-float4 SSS_Fragment(Varyings i) : SV_Target{
-    float bufferDepth = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, i.screenUV, 0);
-    float linear01Depth = Linear01Depth(bufferDepth, _ZBufferParams);
-
-
-    float3 normalWS = SAMPLE_TEXTURE2D(_GBufferNormalTex, sampler_GBufferNormalTex, i.screenUV).xyz * 2.0 - 1.0;     //法线
-    float3 normalVS = normalize( mul((float3x3)_WorldToCamera, normalWS) );
-
-    float3 positionVS = linear01Depth * i.viewRay;
-    float3 viewDir = normalize(positionVS);
-
-    float3 reflectDir = reflect(viewDir, normalVS);
-
-    float2 hitScreenPos = float2(-1, -1);
-    float4 reflectTex = 0;
-    // float4 specular = SAMPLE_TEXTURE2D(_GBufferSpecularTex, sampler_PostFXSource, i.screenUV);                   //PBR数据
-	float4 reflect = SAMPLE_TEXTURE2D(_ReflectTargetTex, sampler_PostFXSource, i.screenUV);			//反射数据决定是否进行PBR
-    if(reflect.w > 0.0){
-        if (screenSpaceRayMarching(positionVS, reflectDir, hitScreenPos))
-        {
-            reflectTex = SAMPLE_TEXTURE2D_LOD(_PostFXSource, sampler_PostFXSource, hitScreenPos, 0);
-        }
-		else
-			reflectTex = float4(reflect.xyz, 1);
-    }
-	else
-		reflectTex = float4(reflect.xyz, 1);
-    return reflectTex;
-}
 
 float4 DrawGBufferColorFragment(Varyings i) : SV_Target
 {
@@ -114,45 +74,38 @@ float4 DrawGBufferColorFragment(Varyings i) : SV_Target
 	float eyeDepth = IsOrthographicCamera() ? OrthographicDepthBufferToLinear(bufferDepth)
 		: LinearEyeDepth(bufferDepth, _ZBufferParams);
     // bufferDepth = 
-    Surface surface;
+    Surface surface = (Surface)0;
     surface.position = _WorldSpaceCameraPos + eyeDepth * i.interpolatedRay.xyz;
 
-	float4 baseNormal = SAMPLE_TEXTURE2D(_GBufferNormalTex, sampler_GBufferNormalTex, i.screenUV);
+	float4 rt0 = SAMPLE_TEXTURE2D(_GBufferRT0, sampler_GBufferRT1, i.screenUV);     	//rgb:abledo,w:metalness
+	float2 rt1 = SAMPLE_TEXTURE2D(_GBufferRT1, sampler_GBufferRT1, i.screenUV).rg;     	//R,G:EncodeNormal
+	float4 rt2 = SAMPLE_TEXTURE2D(_GBufferRT2, sampler_GBufferRT1, i.screenUV);     	//rgb:emissive,w:roughness
+	// float4 rt3 = SAMPLE_TEXTURE2D(_GBufferRT3, sampler_GBufferRT1, i.screenUV);     	//rgb:reflect,w:AO
+	float4 rt3 = SAMPLE_TEXTURE2D(_SSSTargetTex, sampler_GBufferRT1, i.screenUV);     	//rgb:reflect,w:AO
 
-    surface.normal = baseNormal.xyz * 2.0 - 1.0;     //法线
-
+	float3 normalWS = UnpackNormalOct(rt1);
+    surface.normal = normalWS;     //法线
     surface.viewDirection = normalize(_WorldSpaceCameraPos - surface.position);                                     //视线方向
     surface.depth = eyeDepth;                                                                                    //深度
-
-    float4 baseColor = SAMPLE_TEXTURE2D(_GBufferColorTex, sampler_GBufferColorTex, i.screenUV);                     //颜色
-	surface.color = baseColor.rgb;
-	surface.alpha = baseColor.a;
-
-    float4 specular = SAMPLE_TEXTURE2D(_GBufferSpecularTex, sampler_GBufferColorTex, i.screenUV);                   //PBR数据
-    surface.metallic = specular.x;
-    surface.smoothness = specular.y;
-    surface.fresnelStrength = specular.z;
+    surface.metallic = rt0.w;
+    surface.roughness = rt2.w;
     surface.dither = InterleavedGradientNoise(i.positionCS_SS.xy, 0);
+	surface.ambientOcclusion = rt3.w;
+	surface.color = rt0.rgb;
 
-    float4 bakeColor = SAMPLE_TEXTURE2D(_GBufferBakeTex, sampler_GBufferColorTex, i.screenUV);
 
-	surface.shiftColor = float3(baseColor.w, baseNormal.w, bakeColor.w);
-	surface.width = specular.w;
-
-    BRDF brdf = GetBRDF(surface);
-
-	float4 ref = SAMPLE_TEXTURE2D(_ReflectTargetTex, sampler_linear_clamp, i.screenUV);
     float3 color;
-    if(ref.w > 0.0){
+    if(depth01 < 0.9){
 		float3 uv_Depth = float3(i.screenUV, eyeDepth);
-        color = GetGBufferLight(surface, brdf, uv_Depth);
-		float3 reflect = ReflectLod(i.screenUV, 1.0 - surface.smoothness);
-		color.xyz += ReflectBRDF(surface.normal, surface.viewDirection, surface.fresnelStrength, brdf, reflect);
+        color = GetGBufferLight(surface, uv_Depth);
+		float3 reflect = rt3.rgb;
+		color.xyz += rt3.rgb * surface.color;
+		color.xyz *= rt3.w;
     }
     else{
-        color = baseColor.rgb;
+        color = rt0.rgb;
     }
-    color += bakeColor.rgb;
+    color += rt2.rgb;
 
 	#ifdef _DEFFER_FOG
 		color.xyz = GetDefferFog(bufferDepth, surface.position, color.xyz);
@@ -488,7 +441,7 @@ float4 CameraStickWaterFragment(Varyings input) : SV_TARGET{
 
 	float blend = (n.x + n.y)*(1.75 + _StickWaterData.x);
 	// float3 col = tex2D(_MainTex, UV + n).rgb;
-	float3 col = SAMPLE_TEXTURE2D_LOD(_PostFXSource, sampler_linear_clamp, UV + n, 0);
+	float3 col = SAMPLE_TEXTURE2D_LOD(_PostFXSource, sampler_linear_clamp, UV + n, 0).rgb;
 	fragColor = float4(col, blend);
 	return fragColor;
 }

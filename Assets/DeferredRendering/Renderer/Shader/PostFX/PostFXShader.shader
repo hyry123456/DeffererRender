@@ -141,15 +141,15 @@ Shader "Unlit/PostFXShader"
 			ENDHLSL
 		}
 
-		Pass{	//13
-            Name "SSR"
+		// Pass{	//13
+        //     Name "SSR"
 
-            HLSLPROGRAM
-                #pragma target 3.5
-				#pragma vertex SSRPassVertex
-				#pragma fragment SSS_Fragment
-            ENDHLSL
-        }
+        //     HLSLPROGRAM
+        //         #pragma target 3.5
+		// 		#pragma vertex SSRPassVertex
+		// 		#pragma fragment SSS_Fragment
+        //     ENDHLSL
+        // }
 
 		Pass	//14
         {

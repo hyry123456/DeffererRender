@@ -215,24 +215,32 @@ namespace DefferedRender
 		}
 
 		public void ReadyClusterLight(Camera camera, ClusterLightSetting setting,
-			int depthId)
+			int depthId, CommandBuffer buffer, int width, int height, bool isDebug)
 		{
 			ClusterLight_VS clusterLight_VS = ClusterLight_VS.Instance;
 
-
-            if (camera.cameraType == CameraType.Game && setting.isUse && clusterLight_VS == null)
+			if (camera.cameraType == CameraType.Game && setting.isUse 
+				&& clusterLight_VS != null)
             {
                 buffer.EnableShaderKeyword("_USE_CLUSTER");
-			}
-            else
+            }
+			else
             {
                 buffer.DisableShaderKeyword("_USE_CLUSTER");
-                clusterLight_VS.DrawCluster();
-                return;
-            }
+#if UNITY_EDITOR
+				if (isDebug)
+					clusterLight_VS.DrawCluster(cullingResults.visibleLights.Length);
+#endif
+				//clusterLight_VS.DrawCluster();
+				return;
+			}
 
-			clusterLight_VS.ComputeLightCluster(buffer, setting, camera, depthId);
-			//clusterLight_VS.DrawCluster();
+			clusterLight_VS.ComputeLightCluster(buffer, setting, 
+				camera, depthId, width, height);
+#if UNITY_EDITOR
+			if (isDebug)
+				clusterLight_VS.DrawCluster(cullingResults.visibleLights.Length);
+#endif
 		}
 	}
 }

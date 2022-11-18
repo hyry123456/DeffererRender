@@ -5,14 +5,13 @@ Shader "Defferer/BRDF_WithWater"
         _MainTex("Texture", 2D) = "white" {}
 		_Color("Color", Color) = (0.5, 0.5, 0.5, 1.0)
 
-		_ShiftColor("BSDF Shift Color", Color) = (0.5, 0.5, 0.5, 1.0)
-		_Width("BSDF Width", Range(0.1, 1.0)) = 1
 		_Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
 		[Toggle(_CLIPPING)] _Clipping ("Alpha Clipping", Float) = 0
 
-		_Metallic ("Metallic", Range(0, 1)) = 0
-		_Smoothness ("Smoothness", Range(0, 1)) = 0.5
-		_Fresnel ("Fresnel", Range(0, 1)) = 1
+		_Metallic("Metallic", Range(0, 1)) = 0
+		_Roughness("Roughness", Range(0, 1)) = 0.5
+		_WaterMetallic("Water Metallic", Range(0, 1)) = 0
+		_WaterRoughness("Water Roughness", Range(0, 1)) = 0
 
 		[Toggle(_NORMAL_MAP)] _NormalMapToggle ("Normal Map", Float) = 0
 		[NoScaleOffset] _NormalMap("Normals", 2D) = "bump" {}

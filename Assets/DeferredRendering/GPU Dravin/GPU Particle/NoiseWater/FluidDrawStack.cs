@@ -7,11 +7,11 @@ namespace DefferedRender
     public interface IFluidDraw
     {
         /// <summary> /// 液体渲染的调用方法   /// </summary>
-        /// <param name="sourceId">目标纹理</param>
         /// <param name="width">纹理宽度</param>
         /// <param name="height">纹理高度</param>
+        /// <param name="dest">目标纹理</param>
         public void IFluidDraw(ScriptableRenderContext context, CommandBuffer buffer,
-            RenderTargetIdentifier[] gBuffers, int gBufferDepth, int width, int height);
+            int gBufferDepth, int width, int height, int dest);
     }
 
 
@@ -49,12 +49,12 @@ namespace DefferedRender
         }
 
         public void BeginDrawFluid(ScriptableRenderContext context, CommandBuffer buffer,
-            RenderTargetIdentifier[] gBuffers, int gBufferDepth, int width, int height)
+            RenderTargetIdentifier[] gBuffers, int gBufferDepth, int width, int height, int dest)
         {
             buffer.BeginSample("DrawFluid");
             for(int i=0; i<fluids.Count; i++)
             {
-                fluids[i].IFluidDraw(context, buffer, gBuffers, gBufferDepth, width, height);
+                fluids[i].IFluidDraw(context, buffer, gBufferDepth, width, height, dest);
             }
             buffer.EndSample("DrawFluid");
             context.ExecuteCommandBuffer(buffer);
