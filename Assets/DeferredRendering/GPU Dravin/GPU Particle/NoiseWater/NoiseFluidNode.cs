@@ -59,6 +59,9 @@ namespace DefferedRender
         Shader shader;
         Material material;
 
+        [SerializeField]
+        Cubemap cubemap;
+
 
         FluidGroup[] groups;
 
@@ -353,7 +356,7 @@ namespace DefferedRender
         public void IFluidDraw(ScriptableRenderContext context, CommandBuffer buffer,
             int gBufferDepth, int width, int height, int dest)
         {
-            float pixelScale = 0.5f;
+            float pixelScale = 0.8f;
             int bufferWidth = (int)(pixelScale * width),
                 bufferHeight = (int)(pixelScale * height);
             buffer.GetTemporaryRT(widthTexId, bufferWidth, bufferHeight, 0,
@@ -421,6 +424,10 @@ namespace DefferedRender
             buffer.SetGlobalFloat(cullOffId, waterSetting.cullOff);
             buffer.SetGlobalVector(specularDataId, new Vector2(waterSetting.metallic,
                 waterSetting.roughness));
+
+            material.SetTexture("_CubeMap", cubemap);
+            material.SetVector("_BSDFData", new Vector3(
+                waterSetting.distorion,waterSetting.power, waterSetting.scale));
 
             buffer.Blit(null, dest, material, (int)FluidPass.BlendTarget);
 

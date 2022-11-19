@@ -66,8 +66,8 @@ namespace DefferedRender
                 Texture2D png = new Texture2D(target.width, target.height,
                     TextureFormat.ARGB32, false);
                 png.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
-                byte[] bytes = png.EncodeToPNG();
-                string path = string.Format("Assets/WriteChannel.png");
+                byte[] bytes = png.EncodeToPNG(); 
+                string path = string.Format("Assets/" + origin.name + "_WriteChannel.png");
                 FileStream fs = File.Open(path, FileMode.Create);
                 BinaryWriter writer = new BinaryWriter(fs);
                 writer.Write(bytes);

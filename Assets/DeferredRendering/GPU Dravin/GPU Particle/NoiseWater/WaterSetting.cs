@@ -49,7 +49,7 @@ namespace DefferedRender
         public float particleIntensity = 0.5f;
         [Range(0, 1f)]
         public float collsionScale = 1;
-        [Range(0, 0.1f)]
+        [Range(0, 0.3f)]
         public float obstruction = 0.05f;
 
         [Range(1, 10)]
@@ -68,6 +68,12 @@ namespace DefferedRender
         public float metallic = 0.1f;
         [Range(0, 1f)]
         public float roughness = 0.1f;
+        [Range(0, 1.0f)]
+        public float distorion = 0.5f;
+        [Min(0.01f)]
+        public float power = 3;
+        [Min(0)]
+        public float scale = 1;
 
         public AnimationCurve particleSize = AnimationCurve.Linear(0, 0, 1, 1);
         private Vector4[] particleSizes;

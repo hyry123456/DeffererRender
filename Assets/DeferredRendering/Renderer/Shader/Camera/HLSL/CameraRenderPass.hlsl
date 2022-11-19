@@ -79,6 +79,11 @@ float CopyDepthPassFragment (Varyings input) : SV_DEPTH {
 }
 
 
+float DebugDrawGBuffer(Varyings input) : SV_DEPTH {
+    float depth = SAMPLE_DEPTH_TEXTURE_LOD(_SourceTexture, sampler_point_clamp, input.screenUV, 0);
+    return Linear01Depth(depth, _ZBufferParams);
+}
+
 // Varyings SSRPassVertex(Attributes input){
 //     Varyings output = (Varyings)0;
 //     output.positionCS_SS = TransformObjectToHClip(input.positionOS);

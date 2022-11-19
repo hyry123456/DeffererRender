@@ -7,6 +7,7 @@ namespace DefferedRender
     {
         _CopyBilt = 0,
         _CopyDepth = 1,
+        DebugDepth = 2,
     }
 
     public partial class DefferRender
@@ -56,6 +57,8 @@ namespace DefferedRender
             cameraProjectMatrixId = Shader.PropertyToID("_CameraProjectionMatrix"),
             worldToCameraMatrixId = Shader.PropertyToID("_WorldToCamera"),
             screenSizeId = Shader.PropertyToID("_ScreenSize");
+
+        int depthTexId = Shader.PropertyToID("_DebugDepth");
 
 
         CommandBuffer buffer = new CommandBuffer
@@ -137,7 +140,7 @@ namespace DefferedRender
             //渲染Gbuffer数据，准备深度图
             DrawGBuffer();
             lighting.ReadyClusterLight(camera, lightSetting.clusterLightSetting, 
-                gBufferDepthId, buffer, width, height, renderSetting.isDebug);
+                gBufferDepthId, buffer, width, height, renderSetting.isDebug, context);
 
             //渲染GBuffer最终颜色以及透明队列以及天空盒
             DrawGBufferLater();
@@ -346,6 +349,14 @@ namespace DefferedRender
 
             //绘制天空盒
             context.DrawSkybox(camera);
+
+            if (renderSetting.isDebug)
+            {
+                buffer.GetTemporaryRT(depthTexId, width, height, 32,
+                    FilterMode.Point, RenderTextureFormat.Depth);
+                Draw(gBufferDepthId, depthTexId, CameraRenderMode.DebugDepth);
+                buffer.ReleaseTemporaryRT(depthTexId);
+            }
 
 
             //用上一帧的颜色值作为当前的颜色贴图

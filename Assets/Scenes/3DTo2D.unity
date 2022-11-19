@@ -920,7 +920,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &417348775
 Transform:
   m_ObjectHideFlags: 0
@@ -951,6 +951,7 @@ MonoBehaviour:
   PerReleaseCount: 1
   compute: {fileID: 7200000, guid: 31a7ad1eb844bcd4f89bc2722c750ce5, type: 3}
   shader: {fileID: 4800000, guid: eaacc3abb135dcb44a4b96f6edecb053, type: 3}
+  cubemap: {fileID: 0}
   collsions:
   - {fileID: 1472694242}
   - {fileID: 1116194434}

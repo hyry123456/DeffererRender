@@ -16,7 +16,7 @@ MonoBehaviour:
   compute: {fileID: 7200000, guid: 9110cb009efbc5c46beea1c47577cfa0, type: 3}
   colorLUTResolution: 32
   ssrSetting:
-    useSSR: 1
+    useSSR: 0
     rayMarchingSetp: 32
     marchSetpSize: 1
     maxMarchDistance: 500
@@ -24,14 +24,14 @@ MonoBehaviour:
     bilaterFilterFactor: 1
     blurRadius: 2
   bulkLight:
-    useBulkLight: 1
+    useBulkLight: 0
     shrinkRadio: 1000
     circleCount: 16
     scatterRadio: 0.63
     checkDistance: 1000
   bloom:
     maxIterations: 7
-    downscaleLimit: 5
+    downscaleLimit: 1
     bicubicUpsampling: 0
     threshold: 0.8
     thresholdKnee: 1

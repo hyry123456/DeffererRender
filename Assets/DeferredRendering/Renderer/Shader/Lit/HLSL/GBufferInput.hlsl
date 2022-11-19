@@ -3,7 +3,7 @@
 
 
 TEXTURE2D(_MainTex);
-TEXTURE2D(_MaskMap);		//r:metallic Mask, g:roughness Mask, b:main Mask, a:AO
+TEXTURE2D(_MaskMap);		//r:metallic Mask, g:roughness Mask, b:detail Mask, a:AO
 TEXTURE2D(_NormalMap);
 TEXTURE2D(_EmissionMap);
 SAMPLER(sampler_MainTex);

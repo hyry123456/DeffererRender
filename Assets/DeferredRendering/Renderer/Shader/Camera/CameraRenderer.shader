@@ -31,5 +31,18 @@ Shader "Unlit/CameraRenderer"
 				#pragma fragment CopyDepthPassFragment
 			ENDHLSL
 		}
+
+        Pass {
+			Name "Debug Depth"
+
+            ZTest Off
+			ZWrite On
+			
+			HLSLPROGRAM
+				#pragma target 3.5
+				#pragma vertex BlitPassSimpleVertex
+				#pragma fragment DebugDrawGBuffer
+			ENDHLSL
+		}
     }
 }

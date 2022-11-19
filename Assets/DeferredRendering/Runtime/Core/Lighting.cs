@@ -215,7 +215,8 @@ namespace DefferedRender
 		}
 
 		public void ReadyClusterLight(Camera camera, ClusterLightSetting setting,
-			int depthId, CommandBuffer buffer, int width, int height, bool isDebug)
+			int depthId, CommandBuffer buffer, int width, int height, bool isDebug,
+			ScriptableRenderContext context)
 		{
 			ClusterLight_VS clusterLight_VS = ClusterLight_VS.Instance;
 
@@ -223,24 +224,28 @@ namespace DefferedRender
 				&& clusterLight_VS != null)
             {
                 buffer.EnableShaderKeyword("_USE_CLUSTER");
-            }
+#if UNITY_EDITOR
+				if (isDebug)
+					clusterLight_VS.DrawCluster(
+						cullingResults.visibleLights.Length, buffer,
+						context, width, height,
+						setting);
+#endif
+			}
 			else
             {
                 buffer.DisableShaderKeyword("_USE_CLUSTER");
-#if UNITY_EDITOR
-				if (isDebug)
-					clusterLight_VS.DrawCluster(cullingResults.visibleLights.Length);
-#endif
+
 				//clusterLight_VS.DrawCluster();
 				return;
 			}
 
 			clusterLight_VS.ComputeLightCluster(buffer, setting, 
-				camera, depthId, width, height);
-#if UNITY_EDITOR
-			if (isDebug)
-				clusterLight_VS.DrawCluster(cullingResults.visibleLights.Length);
-#endif
+				camera, depthId, width, height, isDebug);
+//#if UNITY_EDITOR
+//			if (isDebug)
+//				clusterLight_VS.DrawCluster(cullingResults.visibleLights.Length);
+//#endif
 		}
 	}
 }

@@ -68,26 +68,38 @@ float3 GetGBufferLight(Surface surface, float4 clipPos){
 	return color;
 }
 
-struct DiffuseData{
-	float3 diffuseLightCol;
-	float3 specularCol;
-};
+// struct DiffuseData{
+// 	float3 diffuseLightCol;
+// 	float3 specularCol;
+// };
 
-// void GetLightingDiffuse(Surface surface, Light light, inout DiffuseData diffuse){
-// 	diffuse.diffuseLightCol += saturate(dot(surface.normal, light.direction)) * light.attenuation * light.color;
-// 	float3 halfDIr = normalize(surface.viewDirection + light.direction);
-// 	diffuse.specularCol += light.color * pow(max(0, dot(surface.normal, halfDIr)), surface.smoothness) * light.attenuation * light.color;
-// }
+float3 GetGBufferBSDFLight(Surface surface, float3 uv_Depth, float normalDistorion, float power, float width, float scale){
+	ShadowData shadowData = GetShadowData(surface);
 
-// DiffuseData GetLightingDiffuse(Surface surface, float4 clipPos){
-// 	ShadowData shadowData = GetShadowData(surface);
-// 	DiffuseData diffuse = (DiffuseData)0;
-// 	for (int i = 0; i < GetDirectionalLightCount(); i++) {
-// 		Light light = GetDirectionalLight(i, surface, shadowData);
-// 		GetLightingDiffuse(surface, light, diffuse);
-// 	}
-// 	return diffuse;
-// }
+	float3 color = 0;
+	for (int i = 0; i < GetDirectionalLightCount(); i++) {
+		Light light = GetDirectionalLight(i, surface, shadowData);
+		color += DirectBSDF(surface, light, normalDistorion, power, width, scale);
+	}
+
+#ifdef _USE_CLUSTER
+	uint id = Get1DCluster(uv_Depth.xy, uv_Depth.z);
+	int count = _ClusterCountBuffer[id];
+	LightArray array = _ClusterArrayBuffer[id];
+
+	for (int j = 0; j < count; j++) {
+		Light light = GetOtherLight(array.lightIndex[j], surface, shadowData);
+		color += DirectBSDF(surface, light, normalDistorion, power, width, scale);
+	}
+
+#else
+	for (int j = 0; j < GetOtherLightCount(); j++) {
+		Light light = GetOtherLight(j, surface, shadowData);
+		color += DirectBSDF(surface, light, normalDistorion, power, width, scale);
+	}
+#endif
+	return color;
+}
 
 //因为是视线方向作为法线的，因此要注意相反的情况，但是相反应该要也可以看见
 float3 BulkIncomingLight(Light light, float3 viewDirection, float g){
@@ -119,5 +131,6 @@ float3 GetBulkLighting(float3 worldPos, float3 viewDirection, float2 screenUV, f
 
 	return color;
 }
+
 
 #endif

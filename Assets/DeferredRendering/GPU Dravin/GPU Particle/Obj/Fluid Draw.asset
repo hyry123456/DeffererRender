@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f8960b6962deab489b3c69962a35c23, type: 3}
   m_Name: Fluid Draw
   m_EditorClassIdentifier: 
-  releaseTime: 0.01
+  releaseTime: 0.1
   sustainTime: 10
   groupShapeMode: 0
   particleShadpeMode: 1
@@ -20,7 +20,7 @@ MonoBehaviour:
   particleSpeedMode: 4
   sizeBySpeedMode: 0
   speedRange: {x: 0, y: 1}
-  sizeRange: {x: 0.5, y: 0.5}
+  sizeRange: {x: 0.2, y: 0.2}
   groupUseGravity: 1
   particleUseGravity: 1
   groupArc: 6.28
@@ -29,21 +29,24 @@ MonoBehaviour:
   particleRadius: 0.1
   groupCubeRange: {x: 1, y: 1, z: 1}
   particleCubeRange: {x: 1, y: 1, z: 1}
-  groupVelocityBegin: {x: 0, y: 0, z: 0}
-  particleVelocityBegin: 6
+  groupVelocityBegin: {x: -3, y: 0, z: 0}
+  particleVelocityBegin: 2
   octave: 8
   frequency: 1
-  particleIntensity: 2
-  collsionScale: 0.137
-  obstruction: 0
-  circleBlur: 1
+  particleIntensity: 1
+  collsionScale: 0.18
+  obstruction: 0.054
+  circleBlur: 3
   cullOff: 0.014
-  bilaterFilterFactor: 0.755
-  blurRadius: 2
-  waterCol: {r: 0, g: 11.3089, b: 15.999998, a: 1}
-  maxFluidWidth: 2
+  bilaterFilterFactor: 0
+  blurRadius: 3
+  waterCol: {r: 0, g: 1.0588236, b: 1.4980392, a: 0.3254902}
+  maxFluidWidth: 1
   metallic: 0
-  roughness: 0.1
+  roughness: 1
+  distorion: 0.554
+  power: 6
+  scale: 10
   particleSize:
     serializedVersion: 2
     m_Curve:

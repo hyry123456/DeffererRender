@@ -403,6 +403,19 @@ float2 _SpecularData;
 float4x4 _InverseVPMatrix;
 TEXTURE2D(_GBufferRT0);
 TEXTURE2D(_GBufferRT3);
+TEXTURECUBE(_CubeMap);
+SAMPLER(sampler_CubeMap);
+float4 _CubeMap_HDR;
+float4 _BSDFData;       //x:distorion,y:power,z:scale
+
+inline half3 ReflectProbe(half3 refDir, float mip_Level)
+{
+	float4 environment = SAMPLE_TEXTURECUBE_LOD(
+		_CubeMap, sampler_CubeMap, refDir, mip_Level
+	);
+	return DecodeHDREnvironment(environment, _CubeMap_HDR);
+}
+
 
 float3 GetWorldPos(float depth, float2 uv){
     #if defined(UNITY_REVERSED_Z)
@@ -425,9 +438,15 @@ float4 BlendToTargetFrag(Varyings input) : SV_TARGET
     float3 normal = normalize(UnpackNormalOct(normalOct));
     float3 position = GetWorldPos(depth, input.screenUV);
 
-    float2 offsetSize = _CameraBufferSize.zw / 100;
+    float2 offsetSize = _CameraBufferSize.zw / 30;
     float3 color = SAMPLE_TEXTURE2D(_GBufferRT0, sampler_linear_clamp, input.screenUV + normalOct * _CameraBufferSize.xy * offsetSize * width).rgb;
-    float3 reflect = SAMPLE_TEXTURE2D(_GBufferRT3, sampler_linear_clamp, input.screenUV + normalOct * _CameraBufferSize.xy * offsetSize * width).rgb;
+    // float3 color = SAMPLE_TEXTURE2D(_GBufferRT0, sampler_linear_clamp, input.screenUV).rgb;
+    // float3 reflect = SAMPLE_TEXTURE2D(_GBufferRT3, sampler_linear_clamp, input.screenUV + normalOct * _CameraBufferSize.xy * offsetSize * width).rgb;
+
+    float3 viewDir = normalize(_WorldSpaceCameraPos - position);
+	float3 reflect_dir = reflect(-viewDir, normal);		
+	float mip_Level = _SpecularData.x * (1.7 - 0.7 * _SpecularData.x);
+	float3 refl = ReflectProbe(reflect_dir, mip_Level);
 
     Surface surface = (Surface)0;
     surface.position = position;
@@ -437,13 +456,16 @@ float4 BlendToTargetFrag(Varyings input) : SV_TARGET
     surface.metallic = _SpecularData.x;
     surface.roughness = _SpecularData.y;
 	surface.ambientOcclusion = 1;
-	surface.color = color * _WaterColor;
+	surface.color = lerp(color, _WaterColor.xyz, _WaterColor.w);
 
     float3 uv_Depth = float3(input.screenUV, eyeDepth);
-    color = GetGBufferLight(surface, uv_Depth);
-    // color.xyz += reflect * surface.color;
+    color = GetGBufferBSDFLight(surface, uv_Depth, _BSDFData.x, _BSDFData.y, width * 0.7, _BSDFData.z);
+    color = saturate(color);
+
+    color += refl * surface.color;
 
     return float4(color, width);
+    // return float4(refl, 1);
 }
 
 float WriteDepth(Varyings input): SV_DEPTH

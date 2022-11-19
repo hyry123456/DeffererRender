@@ -45,10 +45,10 @@ namespace DefferedRender
 
 
 		Camera preCamera;
-
-        public void ComputeLightCluster(CommandBuffer buffer,
+		Vector3 leftPoint;
+		public void ComputeLightCluster(CommandBuffer buffer,
 			ClusterLightSetting clusterLight, Camera camera, int depthId,
-			int width, int height)
+			int width, int height, bool isDebug)
 		{
 			ComputeShader createClusterCS = clusterLight.clusterLightCS;
 			Vector3Int clusterCount = clusterLight.clusterCount;
@@ -102,8 +102,7 @@ namespace DefferedRender
 				viewFrustumCorners.SetRow(2, topRight * camera.farClipPlane);
 				viewFrustumCorners.SetRow(3, topLeft * camera.farClipPlane);
 
-
-				int kernel = createClusterCS.FindKernel("CSMain");
+                int kernel = createClusterCS.FindKernel("CSMain");
 
 				clusterBuffer?.Release();
 				clusterBuffer = new ComputeBuffer(bufferSize, Marshal.SizeOf(typeof(ClusterData)));
@@ -119,26 +118,44 @@ namespace DefferedRender
 				clusterArrayBuffer = new ComputeBuffer(bufferSize, sizeof(int) * 64);
 			}
 
-			buffer.SetComputeTextureParam(createClusterCS, readyKernel, depthId, depthId);
-			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterBufferId, clusterBuffer);
-			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterCountBufferId, clusterCountBuffer);
-			buffer.SetComputeBufferParam(createClusterCS, readyKernel, clusterArrayBufferId, clusterArrayBuffer);
+			int kernel2 = (isDebug) ? readyKernel + 1 : readyKernel;
+
+            if (isDebug)
+            {
+				buffer.GetTemporaryRT(debugTex, width, height, 0, FilterMode.Bilinear,
+					RenderTextureFormat.Default, RenderTextureReadWrite.Linear, 1,
+					true);
+				buffer.SetRenderTarget(debugTex);
+				ComputeShader compute = clusterLight.clusterLightCS;
+				buffer.SetComputeIntParams(compute, "_Pixel_Count", new int[] { width, height });
+                buffer.SetComputeTextureParam(compute, kernel2, "Result", debugTex);
+            }
+
+			buffer.SetComputeTextureParam(createClusterCS, kernel2, depthId, depthId);
+			buffer.SetComputeBufferParam(createClusterCS, kernel2, clusterBufferId, clusterBuffer);
+			buffer.SetComputeBufferParam(createClusterCS, kernel2, clusterCountBufferId, clusterCountBuffer);
+			buffer.SetComputeBufferParam(createClusterCS, kernel2, clusterArrayBufferId, clusterArrayBuffer);
 			buffer.SetComputeMatrixParam(createClusterCS, viewToWorldMatrixId, camera.transform.localToWorldMatrix);
-			buffer.SetComputeFloatParam(createClusterCS, "_FarDistance", camera.farClipPlane);
-			buffer.SetComputeIntParams(createClusterCS, "_Pixel_Count", new int[] { width, height });
-            buffer.DispatchCompute(createClusterCS, readyKernel, xyCount, 1, 1);
+            buffer.DispatchCompute(createClusterCS, kernel2, xyCount, 1, 1);
 
             buffer.SetGlobalBuffer(clusterCountBufferId, clusterCountBuffer);
 			buffer.SetGlobalBuffer(clusterArrayBufferId, clusterArrayBuffer);
 
-        }
+
+
+			buffer.ReleaseTemporaryRT(debugTex);
+		}
 
 
 #if UNITY_EDITOR
 		ClusterData[] clusters;
 		int[] counts;
 
-		public void DrawCluster(int lightCount)
+		int debugTex = Shader.PropertyToID("ClusterTex");
+
+		public void DrawCluster(int lightCount, CommandBuffer buffer, 
+			ScriptableRenderContext context, int width, int height,
+			ClusterLightSetting clusterLight)
         {
 			if (clusterBuffer == null) return;
 			if(clusters == null || clusters.Length != clusterBuffer.count)
@@ -159,18 +176,38 @@ namespace DefferedRender
 				cluster.p5 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p5);
 				cluster.p6 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p6);
 				cluster.p7 = Camera.main.transform.localToWorldMatrix.MultiplyPoint3x4(cluster.p7);
-				Color color = Color.white * counts[i] / lightCount;
-				color.a = 1;
+				//Color color = Color.white * counts[i] / lightCount;
+				//color = Color.white;
+				Color color = counts[i] > 0 ? Color.red : Color.white;
                 if (counts[i] == 0) continue;
+
                 Debug.DrawLine(cluster.p0, cluster.p1, color);
-				Debug.DrawLine(cluster.p1, cluster.p2, color);
-				Debug.DrawLine(cluster.p2, cluster.p3, color);
-				Debug.DrawLine(cluster.p3, cluster.p0, color);
-				Debug.DrawLine(cluster.p4, cluster.p5, color);
-				Debug.DrawLine(cluster.p5, cluster.p6, color);
-				Debug.DrawLine(cluster.p6, cluster.p7, color);
-				Debug.DrawLine(cluster.p7, cluster.p4, color);
-			}
+                Debug.DrawLine(cluster.p1, cluster.p2, color);
+                Debug.DrawLine(cluster.p2, cluster.p3, color);
+                Debug.DrawLine(cluster.p3, cluster.p0, color);
+                Debug.DrawLine(cluster.p4, cluster.p5, color);
+                Debug.DrawLine(cluster.p5, cluster.p6, color);
+                Debug.DrawLine(cluster.p6, cluster.p7, color);
+                Debug.DrawLine(cluster.p7, cluster.p4, color);
+            }
+
+
+			//buffer.GetTemporaryRT(debugTex, width, height, 0, FilterMode.Bilinear,
+			//	RenderTextureFormat.RFloat, RenderTextureReadWrite.Linear, 1,
+			//	true);
+			//buffer.SetRenderTarget(debugTex);
+			//ComputeShader compute = clusterLight.clusterLightCS;
+			//int kernel = compute.FindKernel("DebugDraw");
+			//buffer.SetComputeTextureParam(compute, kernel, debugTex,
+			//	debugTex);
+			//buffer.SetComputeIntParams(compute, "_Pixel_Count", new int[] { width, height });
+			//buffer.SetComputeTextureParam(compute, kernel, "Result", debugTex);
+			//Vector3 clusterCount = clusterLight.clusterCount;
+			//int xyCount = Mathf.CeilToInt(clusterCount.x * clusterCount.y / 1024.0f);
+			//buffer.DispatchCompute(compute, kernel, xyCount, 1, 1);
+			//buffer.ReleaseTemporaryRT(debugTex);
+			//context.ExecuteCommandBuffer(buffer);
+			//buffer.Clear();
 		}
 #endif
 

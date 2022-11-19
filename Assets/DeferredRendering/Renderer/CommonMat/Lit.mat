@@ -36,15 +36,15 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 848f5bd82bd9ee5429eaf98d7ce6421f, type: 3}
-        m_Scale: {x: 1, y: 1}
+        m_Texture: {fileID: 2800000, guid: a3a251fe157de9a4bbd1f328ebe75da7, type: 3}
+        m_Scale: {x: 1, y: 2}
         m_Offset: {x: 0, y: 0}
     - _MaskMap:
-        m_Texture: {fileID: 2800000, guid: 0135c09ace985914e8d26844445eb29f, type: 3}
+        m_Texture: {fileID: 2800000, guid: accb5ef5faa9066439015876a3c943dc, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NormalMap:
-        m_Texture: {fileID: 2800000, guid: 808d2206aca51ad49b5eda9d0ef4f094, type: 3}
+        m_Texture: {fileID: 2800000, guid: 8be8a736f4c09c44ab5051c442007209, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Floats:
@@ -54,21 +54,22 @@ Material:
     - _DetailAlbedo: 1
     - _DetailMapToggle: 1
     - _DetailNormalScale: 1
+    - _DetailRoughness: 1
     - _DetailSmoothness: 1
     - _DstBlend: 0
     - _Fresnel: 0
     - _MaskMapToggle: 1
-    - _Metallic: 0.849
+    - _Metallic: 0
     - _NormalMapToggle: 1
     - _NormalScale: 3
-    - _Roughness: 0.512
+    - _Roughness: 1
     - _Smoothness: 0.734
     - _SrcBlend: 1
     - _Width: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    - _Color: {r: 0.5283019, g: 0.5283019, b: 0.5283019, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
     - _ShiftColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_BuildTextureStacks: []
