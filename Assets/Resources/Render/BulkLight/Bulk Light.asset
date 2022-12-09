@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c68c88304a2bbfd4a81095aa4087e9f9, type: 3}
+  m_Name: Bulk Light
+  m_EditorClassIdentifier: 
+  material: {fileID: 2100000, guid: 6330ec74a5b8e5644a2db6e442d395c9, type: 2}
+  compute: {fileID: 7200000, guid: 03c04a7fc94341d488b3dd32d638c3c8, type: 3}
+  longCount: 15
+  perCircleCount: 15

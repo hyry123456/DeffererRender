@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: fcdf49a7df48b7f4ca4d2a65ecb5fe80
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - compute: {fileID: 7200000, guid: 31a7ad1eb844bcd4f89bc2722c750ce5, type: 3}
+  - shader: {fileID: 4800000, guid: eaacc3abb135dcb44a4b96f6edecb053, type: 3}
+  - cubemap: {instanceID: 0}
+  - waterSetting: {instanceID: 0}
+  - mainTex: {instanceID: 0}
+  - normalTex: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

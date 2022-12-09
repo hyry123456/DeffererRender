@@ -1,0 +1,12 @@
+using UnityEngine;
+
+namespace DefferedRender
+{
+    [System.Serializable]
+	public struct ClusterLightSetting
+	{
+		public ComputeShader clusterLightCS;
+		public Vector3Int clusterCount;           //ZÖáµÄÇÐ¸î´ÎÊý
+		public bool isUse;
+	}
+}
