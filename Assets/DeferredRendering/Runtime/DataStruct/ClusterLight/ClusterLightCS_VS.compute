@@ -1,0 +1,307 @@
+
+#define MAX_OTHER_LIGHT_COUNT 64
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+
+TEXTURE2D(_GBufferDepthTex);
+SAMPLER(sampler_point_clamp);
+
+float4 _ZBufferParams;
+
+
+CBUFFER_START(_CustomLight)
+int _OtherLightCount;
+float4 _OtherLightColors[MAX_OTHER_LIGHT_COUNT];
+float4 _OtherLightPositions[MAX_OTHER_LIGHT_COUNT];
+float4 _OtherLightDirectionsAndMasks[MAX_OTHER_LIGHT_COUNT];
+float4 _OtherLightSpotAngles[MAX_OTHER_LIGHT_COUNT];
+float4 _OtherLightShadowData[MAX_OTHER_LIGHT_COUNT];
+CBUFFER_END
+
+struct ClusterData
+{
+	float3 p0, p1, p2, p3, p4, p5, p6, p7;
+};
+
+struct LightArray {
+	int lightArray[64];
+};
+
+
+struct ComputeShaderInput
+{
+	uint3 GroupID           : SV_GroupID;           // 3D index of the thread group in the dispatch.
+	uint3 GroupThreadID     : SV_GroupThreadID;     // 3D index of local thread ID in a thread group.
+	uint3 DispatchThreadID  : SV_DispatchThreadID;  // 3D index of global thread ID in the dispatch.
+	uint  GroupIndex        : SV_GroupIndex;        // Flattened local index of the thread within a thread group.
+};
+
+#pragma kernel CSMain
+
+float4x4 _ViewFrustumCorners;	//x=buttomLeft, y=buttomRight, z=topRight, w=topLeft
+RWStructuredBuffer<ClusterData> _ClusterDataBuffer;
+RWStructuredBuffer<int> _ClusterCountBuffer;
+RWStructuredBuffer<LightArray> _ClusterArrayBuffer;
+
+uint _CL_CountX;
+uint _CL_CountY;
+uint _CL_CountZ;
+
+uint3 ClusterCount1DTo3D(uint id) {
+	uint z = id / (_CL_CountX * _CL_CountY);					//Z跨过的个数
+	uint y = (id % (_CL_CountX * _CL_CountY)) / _CL_CountX;		//Y跨过的个数
+	uint x = (id % (_CL_CountX * _CL_CountY)) % _CL_CountX;
+	return uint3(x, y, z);
+}
+
+
+[numthreads(1024, 1, 1)]
+void CSMain(ComputeShaderInput input)
+{
+	uint clusterIndex1D = input.DispatchThreadID.x;
+	uint3 index3D = ClusterCount1DTo3D(clusterIndex1D);
+
+	float3 ratio3D = index3D / float3(_CL_CountX, _CL_CountY, _CL_CountZ);
+	float3 ratioAdd3D = uint3(index3D.x + 1, index3D.y + 1, index3D.z + 1)
+		/ float3(_CL_CountX, _CL_CountY, _CL_CountZ);
+
+	float3 buttomLeft = lerp(_ViewFrustumCorners[0].xyz, _ViewFrustumCorners[2].xyz, float3(ratio3D.x, ratio3D.y, 1));
+	float3 buttomRight = lerp(_ViewFrustumCorners[0].xyz, _ViewFrustumCorners[2].xyz, float3(ratioAdd3D.x, ratio3D.y, 1));
+	float3 topLeft = lerp(_ViewFrustumCorners[0].xyz, _ViewFrustumCorners[2].xyz, float3(ratio3D.x, ratioAdd3D.y, 1));
+	float3 topRight = lerp(_ViewFrustumCorners[0].xyz, _ViewFrustumCorners[2].xyz, float3(ratioAdd3D.x, ratioAdd3D.y, 1));
+
+	ClusterData data;
+	data.p0 = buttomLeft * ratio3D.z;
+	data.p1 = buttomLeft * ratioAdd3D.z;
+	data.p2 = topLeft * ratioAdd3D.z;
+	data.p3 = topLeft * ratio3D.z;
+	data.p4 = buttomRight * ratio3D.z;
+	data.p5 = buttomRight * ratioAdd3D.z;
+	data.p6 = topRight * ratioAdd3D.z;
+	data.p7 = topRight * ratio3D.z;
+
+	_ClusterDataBuffer[clusterIndex1D] = data;
+}
+
+float Square(float x) {
+	return x * x;
+}
+
+//检查点是否在灯光范围
+bool CheckPositionInLight(float3 pos, int lightIndex) {
+	float4 lightPos = _OtherLightPositions[lightIndex];
+	float3 ray = lightPos.xyz - pos;
+
+	if (dot(normalize(ray), _OtherLightDirectionsAndMasks[lightIndex].xyz)
+		< _OtherLightSpotAngles[lightIndex].z)
+		return false;
+
+	float disSqr = dot(ray, ray);
+	if (disSqr <= (1 / lightPos.w))
+		return true;
+
+	return false;
+}
+
+#pragma kernel ReadyLight
+
+float4x4 _ViewToWorldMat;
+float4x4 _InverseVPMatrix;
+float3 _WorldSpaceCameraPos;
+uint2 _Pixel_Count;
+float _Distance;
+
+RWTexture2D<float4> Result;
+
+float3 GetWorldPos(float depth, float2 uv) {
+#if defined(UNITY_REVERSED_Z)
+	depth = 1 - depth;
+#endif
+	float4 ndc = float4(uv.x * 2 - 1, uv.y * 2 - 1, depth * 2 - 1, 1);
+
+	float4 worldPos = mul(_InverseVPMatrix, ndc);
+	worldPos /= worldPos.w;
+	return worldPos.xyz;
+}
+
+inline float LinearEyeDepth(float z)
+{
+	return 1.0 / (_ZBufferParams.z * z + _ZBufferParams.w);
+}
+
+inline float Linear01Depth(float z)
+{
+	return 1.0 / (_ZBufferParams.x * z + _ZBufferParams.y);
+}
+
+[numthreads(1024, 1, 1)]
+void ReadyLight(ComputeShaderInput input)
+{
+	uint clusterIndex1D = input.DispatchThreadID.x;
+
+	if (clusterIndex1D > _CL_CountX * _CL_CountY)
+		return;
+
+	uint clusterY = input.DispatchThreadID.x / _CL_CountX;
+	uint clusterX = input.DispatchThreadID.x % _CL_CountX;
+
+
+	float2 uv0 = float2(clusterX, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv1 = float2(clusterX + 1, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv2 = float2(clusterX, clusterY + 1) / float2(_CL_CountX, _CL_CountY);
+	float2 uv3 = float2(clusterX + 1, clusterY + 1) / float2(_CL_CountX, _CL_CountY);
+
+	uint2 index0 = uv0 * _Pixel_Count;
+	uint2 index1 = uv1 * _Pixel_Count;
+	uint2 index2 = uv2 * _Pixel_Count;
+	uint2 index3 = uv3 * _Pixel_Count;
+
+	float depth0 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv0, 0);
+	float depth1 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv1, 0);
+	float depth2 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv2, 0);
+	float depth3 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv3, 0);
+
+	depth0 = Linear01Depth(depth0);
+	depth1 = Linear01Depth(depth1);
+	depth2 = Linear01Depth(depth2);
+	depth3 = Linear01Depth(depth3);
+
+	float depth = max(max(depth0, depth1), max(depth2, depth3));
+
+	// for(uint k=index0.x; k < index3.x; k++){
+	// 	float x = lerp(uv0.x, uv3.x, (k - index0.x) / (float)(index3.x - index0.x));
+	// 	for(uint j = index0.y; j < index3.y; j++){
+	// 		float y = lerp(uv0.y, uv3.y, (k - index0.y) / (float)(index3.y - index0.y));
+	// 		Result[uint2(k, j)] = float4(uv0, 0, 1);
+	// 	}
+	// }
+
+	uint count = depth * _CL_CountZ + 1;
+	count = min(_CL_CountZ, count);
+
+	uint i = 0;
+
+	for (i = 0; i < count; i++) {
+		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
+		data.p0 = mul(_ViewToWorldMat, float4(data.p0, 1)).xyz;
+		data.p1 = mul(_ViewToWorldMat, float4(data.p1, 1)).xyz;
+		data.p2 = mul(_ViewToWorldMat, float4(data.p2, 1)).xyz;
+		data.p3 = mul(_ViewToWorldMat, float4(data.p3, 1)).xyz;
+		data.p4 = mul(_ViewToWorldMat, float4(data.p4, 1)).xyz;
+		data.p5 = mul(_ViewToWorldMat, float4(data.p5, 1)).xyz;
+		data.p6 = mul(_ViewToWorldMat, float4(data.p6, 1)).xyz;
+		data.p7 = mul(_ViewToWorldMat, float4(data.p7, 1)).xyz;
+
+		int size = 0;
+		for (int j = 0; j < _OtherLightCount; j++) {
+			if (CheckPositionInLight(data.p0, j) ||
+				CheckPositionInLight(data.p1, j) ||
+				CheckPositionInLight(data.p2, j) ||
+				CheckPositionInLight(data.p3, j) ||
+				CheckPositionInLight(data.p4, j) ||
+				CheckPositionInLight(data.p5, j) ||
+				CheckPositionInLight(data.p6, j) ||
+				CheckPositionInLight(data.p7, j)
+				)
+			{
+				_ClusterArrayBuffer[clusterIndex1D].lightArray[size++] = j;
+			}
+		}
+		_ClusterCountBuffer[clusterIndex1D] = size;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
+	}
+	for (i = count; i < _CL_CountZ; i++) {
+		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
+		_ClusterCountBuffer[clusterIndex1D] = 0;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
+	}
+
+}
+
+
+#pragma kernel DebugDraw
+
+
+[numthreads(1024, 1, 1)]
+void DebugDraw(ComputeShaderInput input) {
+
+	uint clusterIndex1D = input.DispatchThreadID.x;
+
+	if (clusterIndex1D > _CL_CountX * _CL_CountY)
+		return;
+
+	uint clusterY = input.DispatchThreadID.x / _CL_CountX;
+	uint clusterX = input.DispatchThreadID.x % _CL_CountX;
+
+
+	float2 uv0 = float2(clusterX, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv1 = float2(clusterX + 1, clusterY) / float2(_CL_CountX, _CL_CountY);
+	float2 uv2 = float2(clusterX, clusterY + 1) / float2(_CL_CountX, _CL_CountY);
+	float2 uv3 = float2(clusterX + 1, clusterY + 1) / float2(_CL_CountX, _CL_CountY);
+
+	uint2 index0 = uv0 * _Pixel_Count;
+	uint2 index1 = uv1 * _Pixel_Count;
+	uint2 index2 = uv2 * _Pixel_Count;
+	uint2 index3 = uv3 * _Pixel_Count;
+
+	float depth0 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv0, 0);
+	float depth1 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv1, 0);
+	float depth2 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv2, 0);
+	float depth3 = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, uv3, 0);
+
+	depth0 = Linear01Depth(depth0);
+	depth1 = Linear01Depth(depth1);
+	depth2 = Linear01Depth(depth2);
+	depth3 = Linear01Depth(depth3);
+
+	float depth = max(max(depth0, depth1), max(depth2, depth3));
+
+	for (uint k = index0.x; k < index3.x; k++) {
+		float x = lerp(uv0.x, uv3.x, (k - index0.x) / (float)(index3.x - index0.x));
+		for (uint j = index0.y; j < index3.y; j++) {
+			float y = lerp(uv0.y, uv3.y, (k - index0.y) / (float)(index3.y - index0.y));
+			Result[uint2(k, j)] = float4(uv0, 0, 1);
+		}
+	}
+
+	uint count = depth * _CL_CountZ + 1;
+	count = min(_CL_CountZ, count);
+
+	uint i = 0;
+
+	for (i = 0; i < count; i++) {
+		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
+		data.p0 = mul(_ViewToWorldMat, float4(data.p0, 1)).xyz;
+		data.p1 = mul(_ViewToWorldMat, float4(data.p1, 1)).xyz;
+		data.p2 = mul(_ViewToWorldMat, float4(data.p2, 1)).xyz;
+		data.p3 = mul(_ViewToWorldMat, float4(data.p3, 1)).xyz;
+		data.p4 = mul(_ViewToWorldMat, float4(data.p4, 1)).xyz;
+		data.p5 = mul(_ViewToWorldMat, float4(data.p5, 1)).xyz;
+		data.p6 = mul(_ViewToWorldMat, float4(data.p6, 1)).xyz;
+		data.p7 = mul(_ViewToWorldMat, float4(data.p7, 1)).xyz;
+
+		int size = 0;
+		for (int j = 0; j < _OtherLightCount; j++) {
+			if (CheckPositionInLight(data.p0, j) ||
+				CheckPositionInLight(data.p1, j) ||
+				CheckPositionInLight(data.p2, j) ||
+				CheckPositionInLight(data.p3, j) ||
+				CheckPositionInLight(data.p4, j) ||
+				CheckPositionInLight(data.p5, j) ||
+				CheckPositionInLight(data.p6, j) ||
+				CheckPositionInLight(data.p7, j)
+				)
+			{
+				_ClusterArrayBuffer[clusterIndex1D].lightArray[size++] = j;
+			}
+		}
+		_ClusterCountBuffer[clusterIndex1D] = size;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
+	}
+	for (i = count; i < _CL_CountZ; i++) {
+		ClusterData data = _ClusterDataBuffer[clusterIndex1D];
+		_ClusterCountBuffer[clusterIndex1D] = 0;
+		clusterIndex1D += _CL_CountX * _CL_CountY;
+	}
+
+}

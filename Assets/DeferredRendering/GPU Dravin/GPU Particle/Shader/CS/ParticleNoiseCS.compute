@@ -1,0 +1,110 @@
+#include "../HLSL/ParticleInclude.hlsl"
+#include "../HLSL/ParticleNoiseInc.hlsl"
+
+// //单个粒子需要的数据
+// struct NoiseParticleData {
+//     float4 random;          //xyz是随机数，w是目前存活时间
+//     int2 index;             //状态标记，x是当前编号，y为是否存活(0为死亡)
+//     float3 worldPos;        //当前位置
+//     float4 uvTransData;     //uv动画需要的数据
+//     float interpolation;    //插值需要的数据
+//     float4 color;           //颜色值，包含透明度
+//     float size;             //粒子大小
+//     float3 nowSpeed;        //xyz是当前速度
+// };
+
+
+
+#pragma kernel Noise_PerFrame
+
+//逐帧刷新的方法，用来控制与渲染直接相关的数据
+[numthreads(64, 1, 1)]
+void Noise_PerFrame(int3 gid : SV_GroupID, int index : SV_GroupIndex)
+{
+    int objIndex = gid.x * 64 + index;
+
+    NoiseParticleData particle = _ParticleNoiseBuffer[objIndex];
+    ParticleGroupsData group = _GroupBuffer[gid.x];
+
+    //最后的存活时间小于当前时间, 该粒子已经死亡了
+    if(group.dieTime <= _Time.x){
+        particle.index.y = 0;   //标记为死亡
+        _ParticleNoiseBuffer[objIndex] = particle;
+        return;
+    }
+
+    float randomTime = abs(random(particle.random.z));
+    //获得该粒子的开始时间
+    float parBeginTime = group.dieTime.x - _LifeTime.x * randomTime - _LifeTime.y;
+    //该粒子已经存活的时间
+    float parLiveTime = _Time.x  - parBeginTime;
+    //粒子已经存活的时间大于最大存活时间，或者还没到开始时间
+    if(parLiveTime >= _LifeTime.y || _Time.x < parBeginTime){
+        particle.index.y = 0;   //标记为死亡
+        _ParticleNoiseBuffer[objIndex] = particle;
+        return;
+    }
+
+    //--------------------开始准备粒子--------------------------------
+    //粒子第一次初始化，进行初始化
+    if(particle.index.y == 0){
+        InitialParticle(particle);
+    }
+    else{
+        UpdateParticle(particle, index, gid.x * 64, parLiveTime);
+    }
+
+    //粒子输出数据准备
+    OutParticle(parLiveTime, particle);
+    _ParticleNoiseBuffer[objIndex] = particle;
+}
+
+#pragma kernel Noise_PerFixFrame
+//粒子重力没必要这么大
+#define GRAVITY 4.4
+
+[numthreads(64, 1, 1)]
+void Noise_PerFixFrame(int3 gid : SV_GroupID, int index : SV_GroupIndex){
+
+    int objIndex = gid.x * 64 + index;
+
+    NoiseParticleData particle = _ParticleNoiseBuffer[objIndex];
+
+    //死亡直接退出
+    if(particle.index.y == 0)
+        return;
+    
+    UpdataSpeed(particle);
+    if(_Mode.w == 1)
+        particle.nowSpeed += float3(0, -GRAVITY, 0) * _Time.z;
+
+    // if(_CollsionData.y > 0)
+    //     CheckCollsion(particle);
+    
+    _ParticleNoiseBuffer[objIndex] = particle;
+}
+
+
+#pragma kernel Noise_PerFixFrameWithCollsion
+
+[numthreads(64, 1, 1)]
+void Noise_PerFixFrameWithCollsion(int3 gid : SV_GroupID, int index : SV_GroupIndex){
+    int objIndex = gid.x * 64 + index;
+
+    NoiseParticleData particle = _ParticleNoiseBuffer[objIndex];
+
+    //死亡直接退出
+    if(particle.index.y == 0)
+        return;
+    
+    UpdataSpeed(particle);
+    if(!CheckCollsion(particle)){
+        if(_Mode.w == 1)
+            particle.nowSpeed += float3(0, -GRAVITY, 0) * _Time.z;
+    }
+
+    // if(_CollsionData > 0)
+    //     CheckCollsion(particle);
+    
+    _ParticleNoiseBuffer[objIndex] = particle;
+}

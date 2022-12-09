@@ -1,0 +1,469 @@
+///用来进行后处理用的CS文件，用来优化一些数据的写入
+
+#define random(seed) sin(seed * 641.5467987313875 + 1.943856175)
+
+
+//----------------------------------------------------SSR-------------------------------------------------------------------
+
+#pragma kernel SSR
+
+RWTexture2D<float4> Result;
+Texture2D<float4> _GBufferRT3;  //GBuffer中写入的目标反射纹理
+Texture2D<float4> _GBufferRT0;  //用来获取金属度
+Texture2D<float2> _GBufferRT1;  //Normal
+Texture2D<float> _GBufferDepthTex;
+Texture2D<float4> _OriginTex;   //颜色的根据贴图
+
+SamplerState sampler_GBufferDepthTex;
+SamplerState sampler_OriginTex;
+
+uint2 _PixelCount;
+float4 _ZBufferParams;
+float4 _ProjectionParams;
+
+float4x4 _WorldToCamera;
+float4x4 _InverseProjectionMatrix;
+float4x4 _ViewToScreenMatrix;
+float4x4 _InverseVPMatrix;
+
+int _MaxRayMarchingStep;
+float _RayMarchingStepSize;
+float _MaxRayMarchingDistance;
+float _DepthThickness;
+
+float Linear01Depth(float z)
+{
+    //得到的这个值是视觉空间的z值，即z_view。因为除以f（远裁剪面）,所以范围就在0到1之间.
+    return 1.0/(_ZBufferParams.x*z+_ZBufferParams.y);
+}
+inline float LinearEyeDepth(float z)
+{
+	return 1.0 / (_ZBufferParams.z * z + _ZBufferParams.w);
+}
+
+inline float InvLinearEyeDepth(float z){
+    return (1 / z - _ZBufferParams.w) / _ZBufferParams.z;
+}
+
+void swap(inout float v0, inout float v1)
+{
+    float temp = v0;
+    v0 = v1;
+    v1 = temp;
+}
+
+
+float3 GetWorldPos(float depth, float2 uv){
+	float4 ndc = float4(uv.x * 2 - 1, uv.y * 2 - 1, depth * 2 - 1, 1);
+
+	float4 worldPos = mul(_InverseVPMatrix, ndc);
+	worldPos /= worldPos.w;
+	return worldPos.xyz;
+}
+
+
+float distanceSquared(float2 A, float2 B)
+{
+    A -= B;
+    return dot(A, A);
+}
+
+// bool checkDepthCollision(float3 viewPos, out float2 screenPos)
+// {
+//     float4 clipPos = mul(_ViewToScreenMatrix, float4(viewPos, 1.0));
+
+//     screenPos = clipPos.xy / (clipPos.w * _PixelCount);
+//     float depth = _GBufferDepthTex.SampleLevel(sampler_GBufferDepthTex, screenPos, 0);
+//     depth = LinearEyeDepth(depth);
+//     //判断当前反射点是否在屏幕外，或者超过了当前深度值并且不超过太多的情况下
+// 	return screenPos.x > 0 && screenPos.y > 0 && screenPos.x < 1.0 && screenPos.y < 1.0 && depth < -viewPos.z && depth + _DepthThickness > -viewPos.z;
+// }
+
+// bool viewSpaceRayMarching(float3 rayOri, float3 rayDir, out float2 hitScreenPos)
+// {
+//     int maxStep = _MaxRayMarchingStep;
+//     for(int i = 0; i < maxStep; i++)
+//     {
+//         float3 currentPos = rayOri + rayDir * _RayMarchingStepSize * i;
+//         if (length(rayOri - currentPos) > _MaxRayMarchingDistance)
+//             return false;
+//         if (checkDepthCollision(currentPos, hitScreenPos))
+//         {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+
+bool checkDepthCollision(float3 viewPos, out float2 screenPos, inout float depthDistance)
+{
+    float4 clipPos = mul(_ViewToScreenMatrix, float4(viewPos, 1.0));
+
+    screenPos = clipPos.xy / (clipPos.w * _PixelCount);
+    float depth = _GBufferDepthTex.SampleLevel(sampler_GBufferDepthTex, screenPos, 0);
+    depth = LinearEyeDepth(depth);
+    //判断当前反射点是否在屏幕外，或者超过了当前深度值并且不超过太多的情况下
+	return screenPos.x > 0 && screenPos.y > 0 && screenPos.x < 1.0 && screenPos.y < 1.0 && depth < -viewPos.z;
+}
+
+bool viewSpaceRayMarching(float3 rayOri, float3 rayDir, float currentRayMarchingStepSize, inout float depthDistance, inout float3 currentViewPos, inout float2 hitScreenPos)
+{
+    int maxStep = _MaxRayMarchingStep;	
+    for(int i = 0; i < maxStep; i++)
+    {
+        float3 currentPos = rayOri + rayDir * currentRayMarchingStepSize * i;
+        if (length(rayOri - currentPos) > _MaxRayMarchingDistance)
+            return false;
+        if (checkDepthCollision(currentPos, hitScreenPos, depthDistance))
+        {
+            currentViewPos = currentPos;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+
+bool binarySearchRayMarching(float3 rayOri, float3 rayDir, inout float2 hitScreenPos)
+{
+    float currentStepSize = _RayMarchingStepSize;
+    float3 currentPos = rayOri;
+    float depthDistance = 0;
+    for(int i = 0; i < 6; i++)
+    {
+        if(viewSpaceRayMarching(rayOri, rayDir, currentStepSize, depthDistance, currentPos, hitScreenPos))
+        {
+            if (depthDistance < _DepthThickness)
+            {
+                return true;
+            }
+            rayOri = currentPos - rayDir * currentStepSize;
+            currentStepSize *= 0.5;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return false;
+}
+
+
+bool screenSpaceRayMarching(float3 rayOri, float3 rayDir, inout float2 hitScreenPos)
+{
+    // //反方向反射的，本身也看不见，索性直接干掉
+    // if (rayDir.z > 0.0)
+    //     return false;
+    //首先求得视空间终点位置，不超过最大距离
+    float magnitude = _MaxRayMarchingDistance;
+    float end = rayOri.z + rayDir.z * magnitude;
+    //如果光线反过来超过了近裁剪面，需要截取到近裁剪面
+    if (end > -_ProjectionParams.y)
+        magnitude = (-_ProjectionParams.y - rayOri.z) / rayDir.z;
+    float3 rayEnd = rayOri + rayDir * magnitude;
+    //直接把cliptoscreen与projection矩阵结合，得到齐次坐标系下屏幕位置
+    float4 homoRayOri = mul(_ViewToScreenMatrix, float4(rayOri, 1.0));
+    float4 homoRayEnd = mul(_ViewToScreenMatrix, float4(rayEnd, 1.0));
+    //w
+    float kOri = 1.0 / homoRayOri.w;
+    float kEnd = 1.0 / homoRayEnd.w;
+    //屏幕空间位置
+    float2 screenRayOri = homoRayOri.xy * kOri;
+    float2 screenRayEnd = homoRayEnd.xy * kEnd;
+    screenRayEnd = (distanceSquared(screenRayEnd, screenRayOri) < 0.0001) ? screenRayOri + float2(0.01, 0.01) : screenRayEnd;
+    
+    float3 QOri = rayOri * kOri;
+    float3 QEnd = rayEnd * kEnd;
+    
+    float2 displacement = screenRayEnd - screenRayOri;
+    bool permute = false;
+    if (abs(displacement.x) < abs(displacement.y))
+    {
+        permute = true;
+        
+        displacement = displacement.yx;
+        screenRayOri.xy = screenRayOri.yx;
+        screenRayEnd.xy = screenRayEnd.yx;
+    }
+    float dir = sign(displacement.x);
+    float invdx = dir / displacement.x;
+    //float stride = 2.0 - min(1.0, -rayOri * 0.01);
+    float stride = _RayMarchingStepSize * (random(rayOri.xy) * 0.5 + 0.5);
+    
+    float2 dp = float2(dir, invdx * displacement.y) * stride;
+    float3 dq = (QEnd - QOri) * invdx * stride;
+    float  dk = (kEnd - kOri) * invdx * stride;
+    float rayZmin = rayOri.z;
+    float rayZmax = rayOri.z;
+    float preZ = rayOri.z;
+    
+    float2 screenPoint = screenRayOri;
+    float3 Q = QOri;
+    float k = kOri;
+    
+    // float2 offsetUV = (fmod(floor(screenRayOri), 4.0));
+    // float ditherValue = tex2D(_ditherMap, offsetUV / 4.0).a;
+    float ditherValue = 1;
+    
+    screenPoint += dp * ditherValue;
+    Q.z += dq.z * ditherValue;
+    k += dk * ditherValue;
+    
+    for(int i = 0; i < _MaxRayMarchingStep; i++)
+    {
+        //向前步进一个单位
+        screenPoint += dp;
+        Q.z += dq.z;
+        k += dk;
+        
+        //得到步进前后两点的深度
+        rayZmin = preZ;
+        rayZmax = (dq.z * 0.5 + Q.z) / (dk * 0.5 + k);
+        preZ = rayZmax;
+        if (rayZmin > rayZmax)
+        {
+            swap(rayZmin, rayZmax);
+        }
+        
+        //得到当前屏幕空间位置，交换过的xy换回来，并且根据像素宽度还原回（0,1）区间而不是屏幕区间
+        hitScreenPos = permute ? screenPoint.yx : screenPoint;
+        hitScreenPos /= _PixelCount;
+        
+        //转换回屏幕（0,1）区间，剔除出屏幕的反射
+        if (any(hitScreenPos.xy < 0.0) || any(hitScreenPos.xy > 1.0))
+            return false;
+        
+        //采样当前点深度图，转化为视空间的深度（负值）
+        // float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, hitScreenPos);
+        // depth = -LinearEyeDepth(depth);
+        float depth = _GBufferDepthTex.SampleLevel(sampler_GBufferDepthTex, hitScreenPos, 0);
+        depth = LinearEyeDepth(depth);
+        
+        bool isBehand = (rayZmin <= depth);
+        bool intersecting = isBehand && (rayZmax >= depth - _DepthThickness);
+        
+        if (intersecting)
+            return true;
+    }
+    return false;
+}
+
+
+float signNotZero(float f){
+  return(f >= 0.0) ? 1.0 : -1.0;
+}
+float2 signNotZero(float2 v) {
+  return float2(signNotZero(v.x), signNotZero(v.y));
+}
+
+half3 UnpackNormalOct(half2 e){
+    half3 v = half3(e.xy,1 - abs(e.x) - abs(e.y));
+    if(v.z <= 0){
+        v.xy = signNotZero(v.xy) *(1 - abs(v.yx));
+    } 
+    return normalize(v);
+}
+
+[numthreads(32,32,1)]
+void SSR (uint3 id : SV_DispatchThreadID)
+{
+    //大于范围就退出
+    if(id.x >= _PixelCount.x || id.y >= _PixelCount.y)
+        return;
+    float depth = _GBufferDepthTex[id.xy].r;
+    float linear01Depth = Linear01Depth(depth);
+    float2 normalOct = _GBufferRT1[id.xy].rg;
+
+    float3 normalWS = UnpackNormalOct(normalOct);
+    float3 normalVS = normalize( mul((float3x3)_WorldToCamera, normalWS) );
+
+    float2 uv = (float2)id.xy / _PixelCount;
+
+    float4 clipPos = float4(uv * 2 - 1.0, 1.0, 1.0);
+    float4 viewRay = mul(_InverseProjectionMatrix, clipPos); viewRay.xyz /= viewRay.w;
+
+    float3 positionWS = GetWorldPos(depth, uv);
+    float3 positionVS = viewRay.xyz * linear01Depth;
+    float3 viewDir = normalize(positionVS);
+    float3 reflectDir = reflect(viewDir, normalVS);
+
+    float2 hitScreenPos;
+    float3 reflectTex = 0;
+
+    float4 reflect = _GBufferRT3[id.xy];
+    if(linear01Depth < 0.9){
+        // if (screenSpaceRayMarching(positionVS, reflectDir, hitScreenPos))
+        // if (viewSpaceRayMarching(positionVS, reflectDir, hitScreenPos))
+        if (screenSpaceRayMarching(positionVS, reflectDir, hitScreenPos))
+        // if (binarySearchRayMarching(positionVS, reflectDir, hitScreenPos))
+        {
+            Result[id.xy] = float4(_OriginTex[hitScreenPos * _PixelCount].xyz, _GBufferRT0[id.xy].w);      //标记为写入
+            // Result[id.xy] = float4(hitScreenPos.xy, 0, _GBufferRT0[id.xy].w);      //标记为写入
+        }
+	    else{
+            // Result[id.xy] = reflect;      //标记为未写入
+            Result[id.xy] = float4(reflect.xyz, 0);
+        }
+        // float4 oriClipPos = mul(_ViewToScreenMatrix, float4(positionVS, 1.0));
+        // oriClipPos.xy /= _PixelCount * oriClipPos.w;
+        // Result[id.xy] = float4(oriClipPos.xy, 0, 1);
+        // float depth = InvLinearEyeDepth(mul(_ViewToScreenMatrix, float4(positionVS, 1.0)).w);
+        // depth = Linear01Depth(depth);
+        // Result[id.xy] = depth;
+    }
+    else{
+        // Result[id.xy] = reflect;      //标记为未写入
+        Result[id.xy] = float4(reflect.xyz, 0);
+    }
+}
+
+
+
+#pragma kernel BlurSSRVertical
+#pragma kernel BlurSSRHorizontal
+
+// uint2 _BlurRadius;
+uint _BlurRadius;
+float _BilaterFilterFactor;
+
+half LinearRgbToLuminance(half3 linearRgb)
+{
+    return dot(linearRgb, half3(0.2126729f,  0.7151522f, 0.0721750f));
+}
+
+float CompareColor(float4 col1, float4 col2, float blurScale)
+{
+	float l1 = LinearRgbToLuminance(col1.rgb);
+	float l2 = LinearRgbToLuminance(col2.rgb);
+	return smoothstep(_BilaterFilterFactor * lerp(0, 1, blurScale), 1.0, 1.0 - abs(l1 - l2));
+	// return smoothstep(_BilaterFilterFactor, 1.0, 1.0 - abs(l1 - l2));
+}
+
+//模糊垂直方向，不写入AO
+[numthreads(32,32,1)]
+void BlurSSRVertical(uint3 id : SV_DispatchThreadID){
+
+    //大于范围就退出
+    if(id.x >= _PixelCount.x || id.y >= _PixelCount.y)
+        return;
+
+    uint2 delta = uint2(0, _BlurRadius);
+    //先进行正常模糊
+	float4 col = _OriginTex[id.xy];
+	float4 col0a = _OriginTex[id.xy - delta];
+	float4 col0b = _OriginTex[id.xy + delta];
+	float4 col1a = _OriginTex[id.xy - 2 * delta];
+	float4 col1b = _OriginTex[id.xy + 2 * delta];
+	float4 col2a = _OriginTex[id.xy - 3 * delta];
+	float4 col2b = _OriginTex[id.xy + 3 * delta];
+
+    float blurScale = 1.0 - _OriginTex[id.xy].w;
+
+    float w = 0.37004405286;
+	float w0a = CompareColor(col, col0a, blurScale) * 0.31718061674;
+	float w0b = CompareColor(col, col0b, blurScale) * 0.31718061674;
+	float w1a = CompareColor(col, col1a, blurScale) * 0.19823788546;
+	float w1b = CompareColor(col, col1b, blurScale) * 0.19823788546;
+	float w2a = CompareColor(col, col2a, blurScale) * 0.11453744493;
+	float w2b = CompareColor(col, col2b, blurScale) * 0.11453744493;
+
+    float3 result;
+	result = w * col.rgb;
+	result += w0a * col0a.rgb;
+	result += w0b * col0b.rgb;
+	result += w1a * col1a.rgb;
+	result += w1b * col1b.rgb;
+	result += w2a * col2a.rgb;
+	result += w2b * col2b.rgb;
+
+	result /= w + w0a + w0b + w1a + w1b + w2a + w2b;
+    Result[id.xy] = float4(result, _OriginTex[id.xy].w);
+}
+
+//模糊水平方向，写入
+[numthreads(32,32,1)]
+void BlurSSRHorizontal(uint3 id : SV_DispatchThreadID){
+
+    //大于范围就退出
+    if(id.x >= _PixelCount.x || id.y >= _PixelCount.y)
+        return;
+
+    uint2 delta = uint2(_BlurRadius, 0);
+    //先进行正常模糊
+	float4 col = _OriginTex[id.xy];
+	float4 col0a = _OriginTex[id.xy - delta];
+	float4 col0b = _OriginTex[id.xy + delta];
+	float4 col1a = _OriginTex[id.xy - 2 * delta];
+	float4 col1b = _OriginTex[id.xy + 2 * delta];
+	float4 col2a = _OriginTex[id.xy - 3 * delta];
+	float4 col2b = _OriginTex[id.xy + 3 * delta];
+
+    float blurScale = 1.0 - _OriginTex[id.xy].w;
+
+    float w = 0.37004405286;
+	float w0a = CompareColor(col, col0a, blurScale) * 0.31718061674;
+	float w0b = CompareColor(col, col0b, blurScale) * 0.31718061674;
+	float w1a = CompareColor(col, col1a, blurScale) * 0.19823788546;
+	float w1b = CompareColor(col, col1b, blurScale) * 0.19823788546;
+	float w2a = CompareColor(col, col2a, blurScale) * 0.11453744493;
+	float w2b = CompareColor(col, col2b, blurScale) * 0.11453744493;
+
+    float3 result;
+	result = w * col.rgb;
+	result += w0a * col0a.rgb;
+	result += w0b * col0b.rgb;
+	result += w1a * col1a.rgb;
+	result += w1b * col1b.rgb;
+	result += w2a * col2a.rgb;
+	result += w2b * col2b.rgb;
+
+	result /= w + w0a + w0b + w1a + w1b + w2a + w2b;
+    Result[id.xy] = float4(result, _GBufferRT3[id.xy].w);
+}
+
+//----------------------------------------------------SSR-------------------------------------------------------------------
+
+
+// Varyings SSRPassVertex(Attributes input){
+//     Varyings output = (Varyings)0;
+//     output.positionCS_SS = TransformObjectToHClip(input.positionOS);
+//     output.screenUV = input.baseUV;
+
+//     float4 clipPos = float4(input.baseUV * 2 - 1.0, 1.0, 1.0);
+//     float4 viewRay = mul(_InverseProjectionMatrix, clipPos);
+//     output.viewRay = viewRay.xyz / viewRay.w;
+//     return output;
+// }
+
+// float4 SSS_Fragment(Varyings i) : SV_Target{
+//     float bufferDepth = SAMPLE_DEPTH_TEXTURE_LOD(_GBufferDepthTex, sampler_point_clamp, i.screenUV, 0);
+//     float linear01Depth = Linear01Depth(bufferDepth, _ZBufferParams);
+
+
+//     float2 normalOct = SAMPLE_TEXTURE2D(_GBufferRT1, sampler_GBufferRT1, i.screenUV).rg;     //法线
+// 	float3 normalWS = UnpackNormalOct(normalOct);
+//     float3 normalVS = normalize( mul((float3x3)_WorldToCamera, normalWS) );
+
+//     float3 positionVS = linear01Depth * i.viewRay;
+//     float3 viewDir = normalize(positionVS);
+
+//     float3 reflectDir = reflect(viewDir, normalVS);
+
+//     float2 hitScreenPos = float2(-1, -1);
+//     float4 reflectTex = 0;
+// 	// float4 reflect = SAMPLE_TEXTURE2D(_ReflectTargetTex, sampler_PostFXSource, i.screenUV);			//反射数据决定是否进行PBR
+// 	float4 reflect = 0;
+//     if(linear01Depth < 0.9){
+//         if (screenSpaceRayMarching(positionVS, reflectDir, hitScreenPos))
+//         {
+//             reflectTex = SAMPLE_TEXTURE2D_LOD(_PostFXSource, sampler_PostFXSource, hitScreenPos, 0);
+//         }
+// 		else
+// 			reflectTex = float4(reflect.xyz, 1);
+//     }
+// 	else
+// 		reflectTex = float4(reflect.xyz, 1);
+//     return reflectTex;
+// }

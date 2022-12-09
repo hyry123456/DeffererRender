@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 5beaefbc7d562e54e9533f2997aa01f9
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - compute: {fileID: 7200000, guid: 0300143379b30e744ac10a3bb3dc3099, type: 3}
+  - material: {fileID: 2100000, guid: b098549164ec9e14e80681b1259a0e24, type: 2}
+  - textureArray: {fileID: 18700000, guid: a28b5e54f48ad024b8a6a7faf1fb64f0, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
